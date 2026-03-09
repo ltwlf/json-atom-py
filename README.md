@@ -46,7 +46,7 @@ recovered = revert_delta(copy.deepcopy(target), delta)
 assert recovered == source
 ```
 
-The delta is a plain JSON-serializable dict you can store in a database, send over HTTP, or consume in any language:
+The delta is a `Delta` instance (a `dict` subclass) — JSON-serializable, storable, and consumable in any language. For raw dicts from JSON payloads, wrap with `Delta(d)` or `Delta.from_dict(d)` to get typed access:
 
 ```json
 {
@@ -57,6 +57,72 @@ The delta is a plain JSON-serializable dict you can store in a database, send ov
   ]
 }
 ```
+
+## Typed Models
+
+Delta and Operation are dict subclasses with full IDE support — autocomplete, typed properties, factory methods, and extension attribute access:
+
+```python
+from json_delta import Delta, Operation
+
+# Factory methods with IDE autocomplete
+op = Operation.replace("$.user.role", "admin", old_value="viewer")
+op.op            # "replace" — typed property
+op.path          # "$.user.role"
+op.describe()    # "user > role"
+op.segments      # [PropertySegment("user"), PropertySegment("role")] — cached
+op.filter_values # {} — cached
+
+# Extension properties as attributes (spec Section 11)
+op = Operation.add("$.x", 1, x_editor="Alice", x_reason="onboarding")
+op.x_editor      # "Alice" — attribute access
+op.extensions    # {"x_editor": "Alice", "x_reason": "onboarding"}
+
+# Build deltas with the factory
+delta = Delta.create(
+    Operation.add("$.name", "Alice"),
+    Operation.replace("$.role", "admin", old_value="viewer"),
+)
+
+for op in delta:              # iterate operations
+    print(op.describe())
+
+delta.filter(lambda op: op.op == "add")   # filter by predicate
+delta.affected_paths                       # {"$.name", "$.role"}
+delta.summary()                            # human-readable overview
+```
+
+Still plain dicts — `json.dumps(delta)`, `delta["format"]`, and all dict operations work as expected.
+
+## Pydantic Integration
+
+Operation and Delta work as native Pydantic v2 field types — no `arbitrary_types_allowed`, no custom validators:
+
+```python
+from pydantic import BaseModel
+from json_delta import Operation, Delta
+
+class Change(BaseModel):
+    operation: Operation  # just works
+    delta: Delta          # just works
+    actor: str = ""
+
+# From raw dicts (e.g., API request body)
+change = Change(
+    operation={"op": "add", "path": "$.name", "value": "Alice"},
+    delta={"format": "json-delta", "version": 1, "operations": []},
+    actor="admin",
+)
+
+change.operation.op          # "add" — typed access
+change.model_dump()          # plain dicts, no subclass instances
+change.model_dump_json()     # clean JSON serialization
+Change.model_validate_json(  # full round-trip
+    change.model_dump_json()
+)
+```
+
+Pydantic is **not** a runtime dependency. The integration uses `__get_pydantic_core_schema__` which is only invoked when pydantic is installed.
 
 ## What Is JSON Delta
 
@@ -115,6 +181,8 @@ delta = diff_delta(old, new)
 
 ## API Reference
 
+### Functions
+
 | Function | Description |
 | --- | --- |
 | `diff_delta(old, new, *, array_keys=None, reversible=True)` | Compute a delta between two objects |
@@ -124,6 +192,26 @@ delta = diff_delta(old, new)
 | `revert_delta(obj, delta)` | Revert a delta (shorthand for `apply(obj, invert(delta))`) |
 | `parse_path(path)` | Parse a JSON Delta Path string into typed segments |
 | `build_path(segments)` | Build a canonical path string from segments |
+| `describe_path(path)` | Human-readable description (`"$.user.name"` → `"user > name"`) |
+| `resolve_path(path, document)` | Resolve filter path to RFC 6901 JSON Pointer |
+| `to_json_patch(delta, document)` | Convert delta to RFC 6902 JSON Patch |
+| `from_json_patch(patch)` | Create delta from RFC 6902 JSON Patch |
+
+### Operation Factories
+
+| Factory | Description |
+| --- | --- |
+| `Operation.add(path, value, **ext)` | Create an `add` operation |
+| `Operation.replace(path, value, *, old_value=None, **ext)` | Create a `replace` operation |
+| `Operation.remove(path, *, old_value=None, **ext)` | Create a `remove` operation |
+
+### Delta Factories
+
+| Factory | Description |
+| --- | --- |
+| `Delta.create(*operations, **ext)` | Create a delta with standard envelope |
+| `Delta.from_dict(d)` | Create from raw dict with validation |
+| `Delta.from_json_patch(patch)` | Create from RFC 6902 JSON Patch |
 
 ## JSON Delta vs JSON Patch
 
@@ -138,13 +226,27 @@ delta = diff_delta(old, new)
 
 ## Examples
 
-See the [`examples/`](examples/) directory for runnable demos:
+Pick the example that matches your use case:
 
-- **[keyed_arrays.py](examples/keyed_arrays.py)** — key-based array identity with round-trip verification
-- **[audit_log.py](examples/audit_log.py)** — audit trail with reversible deltas and extension metadata
-- **[undo_redo.py](examples/undo_redo.py)** — undo/redo stack built on delta inversion
-- **[data_sync.py](examples/data_sync.py)** — client-server sync sending deltas instead of full documents
-- **[state_transitions.py](examples/state_transitions.py)** — tracking agent/workflow state changes
+| Example | Use case | What it shows |
+| --- | --- | --- |
+| [quick_api_payload.py](examples/quick_api_payload.py) | **Getting started** | Raw JSON in → validate → apply → revert → serialize |
+| [index_vs_keyed.py](examples/index_vs_keyed.py) | **Why key-based?** | Side-by-side: index-based breaks on reorder, key-based survives |
+| [keyed_arrays.py](examples/keyed_arrays.py) | **Inventory / CRUD** | Key-based array diffs with payload size comparison |
+| [audit_log.py](examples/audit_log.py) | **Compliance / history** | Reversible deltas with extension metadata, replay and revert |
+| [undo_redo.py](examples/undo_redo.py) | **Editor / config** | Multi-step undo/redo stack built on delta inversion |
+| [data_sync.py](examples/data_sync.py) | **Client-server sync** | Compute on client, serialize, validate + apply on server |
+| [state_transitions.py](examples/state_transitions.py) | **Agent / workflow** | Track state changes between steps with affected paths |
+
+```bash
+uv run python examples/quick_api_payload.py   # start here
+uv run python examples/index_vs_keyed.py      # see the differentiator
+uv run python examples/keyed_arrays.py
+uv run python examples/audit_log.py
+uv run python examples/undo_redo.py
+uv run python examples/data_sync.py
+uv run python examples/state_transitions.py
+```
 
 ## Specification
 

@@ -43,16 +43,19 @@ tests/
     test_diff.py      # Diff computation + all array identity models
     test_edge_cases.py  # Cross-module edge cases
     test_json_patch.py  # JSON Patch (RFC 6902) interop
+    test_pydantic.py    # Pydantic v2 integration (conditional on pydantic)
 ```
 
 ## Architecture
 
 - **Zero runtime dependencies** — uses only stdlib (re, copy, math, dataclasses)
 - **Delta/Operation are dict subclasses** — typed property access (`delta.operations`, `op.path`) + full dict compat (`json.dumps`, `[]` access, extensions)
+- **Extension properties** accessible as attributes (`op.x_editor`) or dict syntax (`op["x_editor"]`), via `__getattr__` fallback. `op.extensions` returns all non-spec keys
+- **Pydantic v2 native** — `__get_pydantic_core_schema__` on both classes, zero runtime dependency on pydantic. Use as `BaseModel` fields without `arbitrary_types_allowed`
+- **Cached properties** — `op.segments` and `op.filter_values` are `cached_property` (parsed once per instance)
 - **Path segments are frozen dataclasses** — immutable, hashable, printable
 - **apply_delta mutates in place** — always use the return value (root ops return new objects)
 - **json_equal handles Python's bool⊂int** — `True != 1` in JSON semantics
-- **Extension properties** accessed via dict syntax: `op["x_editor"]`. For typed extensions, subclass Operation/Delta
 
 ## Spec Compliance
 
@@ -65,7 +68,7 @@ tests/
 ## Coding Conventions
 
 - Python 3.12+ — uses `type` statement, `X | Y` union syntax, `@dataclass(slots=True)`
-- Strict mypy (strict=true, disallow_untyped_defs=true)
+- Strict mypy on library source (`uv run mypy src/`; tests are not strict-checked)
 - Ruff for linting (line-length=120)
 - All public functions have docstrings
 - Tests organized by module with descriptive class names

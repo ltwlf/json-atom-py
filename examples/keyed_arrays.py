@@ -2,9 +2,12 @@
 
 Shows how JSON Delta handles arrays where elements have a stable identity
 key, producing diffs that survive insertions, deletions, and reordering.
+
+Run: uv run python examples/keyed_arrays.py
 """
 
 import copy
+import json
 
 from json_delta import apply_delta, diff_delta, invert_delta
 
@@ -30,10 +33,19 @@ target = {
 delta = diff_delta(source, target, array_keys={"products": "sku"})
 
 print("=== Inventory Changes ===")
-for op in delta["operations"]:
-    print(f"  {op['op']:>7s}  {op['path']}")
-    if "value" in op:
-        print(f"           -> {op['value']}")
+for op in delta:
+    print(f"  {op.op:>7s}  {op.describe()}")
+    if op.value is not None:
+        print(f"           -> {op.value}")
+    if op.filter_values:
+        print(f"           key: {op.filter_values}")
+
+# Metrics
+full_size = len(json.dumps(target))
+delta_size = len(json.dumps(delta))
+print(f"\nOperations: {len(delta.operations)}")
+print(f"Affected:   {delta.affected_paths}")
+print(f"Payload:    {delta_size}B delta vs {full_size}B full ({delta_size * 100 // full_size}%)")
 
 # Forward: apply changes to get the new inventory
 result = apply_delta(copy.deepcopy(source), delta)
@@ -44,6 +56,5 @@ inverse = invert_delta(delta)
 recovered = apply_delta(copy.deepcopy(target), inverse)
 assert recovered == source, "apply(target, inverse) != source"
 
-print("\n=== Round-trip verified ===")
-print("apply(source, delta) == target")
-print("apply(target, inverse(delta)) == source")
+print(f"\n{delta.summary()}")
+print("Round-trip: apply ✓  invert ✓")

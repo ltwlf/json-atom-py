@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, Literal
 
 
@@ -69,6 +70,10 @@ class ValidationResult:
 # Delta and Operation types
 # ---------------------------------------------------------------------------
 
+# Fields defined by the spec — everything else is an extension (Section 11)
+_OP_SPEC_KEYS = frozenset({"op", "path", "value", "oldValue"})
+_DELTA_SPEC_KEYS = frozenset({"format", "version", "operations"})
+
 type OpType = Literal["add", "remove", "replace"]
 
 
@@ -76,8 +81,8 @@ class Operation(dict[str, Any]):
     """A single JSON Delta operation with typed property access and convenience methods.
 
     Subclasses ``dict`` — all dict operations (``json.dumps``, ``[]`` access,
-    ``.items()``) work as expected. Extension properties (``x_*``) are accessed
-    via normal dict syntax: ``op["x_editor"]``.
+    ``.items()``) work as expected. Extension properties are accessible as
+    attributes (``op.x_editor``) or via dict syntax (``op["x_editor"]``).
 
     Create operations via factory methods for full IDE support::
 
@@ -153,6 +158,48 @@ class Operation(dict[str, Any]):
         """The previous value (present on ``replace`` and ``remove`` for reversible deltas)."""
         return self.get("oldValue")
 
+    def _invalidate_path_cache(self) -> None:
+        """Drop cached ``segments`` and ``filter_values`` so they are re-parsed on next access."""
+        self.__dict__.pop("segments", None)
+        self.__dict__.pop("filter_values", None)
+
+    @cached_property
+    def segments(
+        self,
+    ) -> list[RootSegment | PropertySegment | IndexSegment | KeyFilterSegment | ValueFilterSegment]:
+        """The parsed path segments for this operation's path (cached).
+
+        Delegates to :func:`json_delta.path.parse_path`.  The result is
+        computed once and cached for the lifetime of the Operation instance.
+        """
+        from json_delta.path import parse_path
+
+        return parse_path(self.path)
+
+    @cached_property
+    def filter_values(self) -> dict[str, Any]:
+        """Extract filter identity values from this operation's path (cached).
+
+        Returns a dict mapping the parent array property name to its filter
+        match value.  This eliminates manual path parsing when you need to know
+        *which* keyed element an operation targets.
+
+        Example::
+
+            op = Operation(op="replace",
+                           path="$.articles[?(@.id=='art-3')].clauses[?(@.id=='cl-1')].text",
+                           value="new")
+            op.filter_values  # {"articles": "art-3", "clauses": "cl-1"}
+        """
+        segs = self.segments
+        result: dict[str, Any] = {}
+        for i, seg in enumerate(segs):
+            if isinstance(seg, (KeyFilterSegment, ValueFilterSegment)) and i > 0:
+                prev = segs[i - 1]
+                if isinstance(prev, PropertySegment):
+                    result[prev.name] = seg.value
+        return result
+
     def describe(self) -> str:
         """Human-readable description of this operation's path.
 
@@ -187,8 +234,95 @@ class Operation(dict[str, Any]):
 
         return _operation_to_json_patch(self, document)
 
+    @property
+    def extensions(self) -> dict[str, Any]:
+        """All non-spec properties on this operation (per JSON Delta v0 Section 11).
+
+        The ``x_`` prefix is recommended for future-safety but not enforced.
+        """
+        return {k: v for k, v in self.items() if k not in _OP_SPEC_KEYS}
+
+    def __getattr__(self, name: str) -> Any:
+        """Fall back to dict lookup for extension attribute access."""
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'") from None
+
+    def __dir__(self) -> list[str]:
+        """Include dict keys for tab-completion in IPython/Jupyter."""
+        return sorted(set(super().__dir__()) | set(self.keys()))
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any) -> Any:
+        """Pydantic v2 native support — zero runtime dependency on pydantic.
+
+        Allows ``Operation`` to be used as a Pydantic field type without
+        ``arbitrary_types_allowed=True``.  Accepts dicts or existing instances;
+        serializes as a plain dict.
+        """
+        from pydantic_core import core_schema as cs
+
+        def validate(value: Any) -> Operation:
+            if isinstance(value, cls):
+                return value
+            if isinstance(value, dict):
+                return cls(value)
+            raise ValueError(f"Expected dict or {cls.__name__}, got {type(value).__name__}")
+
+        return cs.json_or_python_schema(
+            json_schema=cs.chain_schema([
+                cs.dict_schema(),
+                cs.no_info_plain_validator_function(validate),
+            ]),
+            python_schema=cs.union_schema([
+                cs.is_instance_schema(cls),
+                cs.chain_schema([
+                    cs.dict_schema(),
+                    cs.no_info_plain_validator_function(validate),
+                ]),
+            ]),
+            serialization=cs.plain_serializer_function_ser_schema(
+                dict, when_used='always'
+            ),
+        )
+
     def __repr__(self) -> str:
         return f"Operation({dict.__repr__(self)})"
+
+    # -- Dict mutator overrides: invalidate path cache when "path" changes --
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        super().__setitem__(key, value)
+        if key == "path":
+            self._invalidate_path_cache()
+
+    def __delitem__(self, key: str) -> None:
+        super().__delitem__(key)
+        if key == "path":
+            self._invalidate_path_cache()
+
+    def update(self, __m: Any = (), **kwargs: Any) -> None:
+        had_path = self.get("path")
+        super().update(__m, **kwargs)
+        if self.get("path") != had_path:
+            self._invalidate_path_cache()
+
+    def pop(self, key: str, *args: Any) -> Any:
+        result = super().pop(key, *args)
+        if key == "path":
+            self._invalidate_path_cache()
+        return result
+
+    def popitem(self) -> tuple[str, Any]:
+        key, value = super().popitem()
+        if key == "path":
+            self._invalidate_path_cache()
+        return key, value
+
+    def clear(self) -> None:
+        super().clear()
+        self._invalidate_path_cache()
 
 
 class Delta(dict[str, Any]):
@@ -196,7 +330,7 @@ class Delta(dict[str, Any]):
 
     Subclasses ``dict`` — ``json.dumps(delta)``, ``delta["operations"]``, and
     all standard dict operations work as expected. Extension properties are
-    accessed via normal dict syntax: ``delta["x_agent"]``.
+    accessible as attributes (``delta.x_agent``) or via dict syntax.
 
     Operations are automatically wrapped as :class:`Operation` instances on
     construction, giving typed access to ``op.path``, ``op.value``, etc.
@@ -246,6 +380,30 @@ class Delta(dict[str, Any]):
         """
         d: dict[str, Any] = {"format": "json-delta", "version": 1, "operations": list(operations)}
         d.update(extensions)
+        return cls(d)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Delta:
+        """Create a Delta from a raw dict, checking that required envelope keys exist.
+
+        This is a lightweight gate — it verifies that ``format``, ``version``,
+        and ``operations`` are present but does **not** validate types or
+        operation shapes.  For full structural validation, call
+        :func:`json_delta.validate.validate_delta` on the result.
+
+        Raises:
+            ValueError: If the dict is missing required envelope keys
+                (``format``, ``version``, ``operations``).
+
+        Example::
+
+            raw = json.loads(payload)
+            delta = Delta.from_dict(raw)          # checks keys
+            result = validate_delta(delta)         # full validation
+        """
+        missing = {"format", "version", "operations"} - d.keys()
+        if missing:
+            raise ValueError(f"Not a valid delta envelope — missing keys: {', '.join(sorted(missing))}")
         return cls(d)
 
     @property
@@ -417,6 +575,65 @@ class Delta(dict[str, Any]):
         from json_delta.json_patch import from_json_patch
 
         return from_json_patch(patch)
+
+    @property
+    def extensions(self) -> dict[str, Any]:
+        """All non-spec properties on this delta envelope (per JSON Delta v0 Section 11).
+
+        The ``x_`` prefix is recommended for future-safety but not enforced.
+        """
+        return {k: v for k, v in self.items() if k not in _DELTA_SPEC_KEYS}
+
+    def __getattr__(self, name: str) -> Any:
+        """Fall back to dict lookup for extension attribute access."""
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'") from None
+
+    def __dir__(self) -> list[str]:
+        """Include dict keys for tab-completion in IPython/Jupyter."""
+        return sorted(set(super().__dir__()) | set(self.keys()))
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any) -> Any:
+        """Pydantic v2 native support — zero runtime dependency on pydantic.
+
+        Allows ``Delta`` to be used as a Pydantic field type without
+        ``arbitrary_types_allowed=True``.  Accepts dicts or existing instances;
+        serializes as a fully plain dict (nested Operations flattened).
+        """
+        from pydantic_core import core_schema as cs
+
+        def validate(value: Any) -> Delta:
+            if isinstance(value, cls):
+                return value
+            if isinstance(value, dict):
+                return cls(value)
+            raise ValueError(f"Expected dict or {cls.__name__}, got {type(value).__name__}")
+
+        def serialize(v: Any) -> dict[str, Any]:
+            result = dict(v)
+            if "operations" in result:
+                result["operations"] = [dict(op) for op in result["operations"]]
+            return result
+
+        return cs.json_or_python_schema(
+            json_schema=cs.chain_schema([
+                cs.dict_schema(),
+                cs.no_info_plain_validator_function(validate),
+            ]),
+            python_schema=cs.union_schema([
+                cs.is_instance_schema(cls),
+                cs.chain_schema([
+                    cs.dict_schema(),
+                    cs.no_info_plain_validator_function(validate),
+                ]),
+            ]),
+            serialization=cs.plain_serializer_function_ser_schema(
+                serialize, when_used='always'
+            ),
+        )
 
     def __repr__(self) -> str:
         ops = len(self.operations) if "operations" in self else 0

@@ -9,14 +9,8 @@ from typing import Any
 
 from json_delta.apply import apply_delta
 from json_delta.errors import InvertError
-from json_delta.models import Delta, Operation
+from json_delta.models import _DELTA_SPEC_KEYS, _OP_SPEC_KEYS, Delta, Operation
 from json_delta.validate import validate_delta
-
-# Fields defined by the spec for operations — everything else is an extension
-_OP_SPEC_FIELDS = {"op", "path", "value", "oldValue"}
-
-# Fields defined by the spec for the envelope — everything else is an extension
-_ENVELOPE_SPEC_FIELDS = {"format", "version", "operations"}
 
 
 def invert_delta(delta: Delta) -> Delta:
@@ -50,7 +44,7 @@ def invert_delta(delta: Delta) -> Delta:
     # Build the inverse delta, preserving envelope-level extensions
     inverse: dict[str, Any] = {}
     for key, value in delta.items():
-        if key not in _ENVELOPE_SPEC_FIELDS:
+        if key not in _DELTA_SPEC_KEYS:
             inverse[key] = value
     inverse["format"] = delta["format"]
     inverse["version"] = delta["version"]
@@ -72,7 +66,7 @@ def _invert_operation(op: Operation) -> Operation:
 
     # Copy extension properties (everything not in the spec-defined set)
     for key, value in op.items():
-        if key not in _OP_SPEC_FIELDS:
+        if key not in _OP_SPEC_KEYS:
             inverted[key] = value
 
     # Set the spec fields based on the inversion rules

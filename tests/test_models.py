@@ -3,6 +3,8 @@
 import copy
 import json
 
+import pytest
+
 from json_delta.models import (
     Delta,
     IndexSegment,
@@ -214,6 +216,49 @@ class TestOperation:
         patch_op = op.to_json_patch_op(doc)
         assert patch_op == {"op": "replace", "path": "/items/0/name", "value": "Gadget"}
 
+    # -- segments property --------------------------------------------------
+
+    def test_segments_simple(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        segs = op.segments
+        assert len(segs) == 2
+        assert segs[0] == PropertySegment(name="user")
+        assert segs[1] == PropertySegment(name="name")
+
+    def test_segments_with_filter(self) -> None:
+        op = Operation(op="replace", path="$.items[?(@.id==1)].name", value="X")
+        segs = op.segments
+        assert len(segs) == 3
+        assert segs[0] == PropertySegment(name="items")
+        assert segs[1] == KeyFilterSegment(property="id", value=1)
+        assert segs[2] == PropertySegment(name="name")
+
+    def test_segments_root(self) -> None:
+        op = Operation(op="replace", path="$", value={})
+        assert op.segments == []
+
+    # -- filter_values (cached property) ------------------------------------
+
+    def test_filter_values_single_key(self) -> None:
+        op = Operation(op="replace", path="$.items[?(@.id==42)].name", value="X")
+        assert op.filter_values == {"items": 42}
+
+    def test_filter_values_multiple_keys(self) -> None:
+        op = Operation(
+            op="replace",
+            path="$.articles[?(@.id=='art-3')].clauses[?(@.id=='cl-1')].text",
+            value="new",
+        )
+        assert op.filter_values == {"articles": "art-3", "clauses": "cl-1"}
+
+    def test_filter_values_no_filters(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        assert op.filter_values == {}
+
+    def test_filter_values_value_filter(self) -> None:
+        op = Operation(op="remove", path="$.tags[?(@=='urgent')]")
+        assert op.filter_values == {"tags": "urgent"}
+
     # -- Factory methods ----------------------------------------------------
 
     def test_factory_add(self) -> None:
@@ -258,6 +303,92 @@ class TestOperation:
         serialized = json.dumps(op, sort_keys=True)
         assert '"op": "replace"' in serialized
         assert '"oldValue": 1' in serialized
+
+    # -- Caching ------------------------------------------------------------
+
+    def test_segments_cached(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        assert op.segments is op.segments  # same object identity
+
+    def test_filter_values_cached(self) -> None:
+        op = Operation(op="replace", path="$.items[?(@.id==1)].name", value="X")
+        assert op.filter_values is op.filter_values  # same object identity
+
+    def test_cache_invalidated_on_setitem(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        old_segs = op.segments
+        op["path"] = "$.items[0].title"
+        assert op.segments != old_segs
+        assert op.segments[0] == PropertySegment(name="items")
+
+    def test_cache_invalidated_on_update(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        _ = op.segments  # populate cache
+        op.update({"path": "$.x"})
+        assert op.segments == [PropertySegment(name="x")]
+
+    def test_cache_invalidated_on_clear(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        _ = op.segments  # populate cache
+        op.clear()
+        assert "segments" not in op.__dict__
+
+    def test_cache_invalidated_on_popitem(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        _ = op.segments  # populate cache
+        # popitem removes LIFO; keep popping until "path" is gone
+        while "path" in op:
+            op.popitem()
+        assert "segments" not in op.__dict__
+
+    def test_cache_not_invalidated_on_non_path_setitem(self) -> None:
+        op = Operation(op="replace", path="$.user.name", value="Bob")
+        segs = op.segments
+        op["value"] = "Alice"  # non-path key
+        assert op.segments is segs  # same cached object
+
+    # -- __getattr__ (extension attribute access) ---------------------------
+
+    def test_getattr_extension(self) -> None:
+        op = Operation(op="add", path="$.x", value=1, x_editor="admin")
+        assert op.x_editor == "admin"
+
+    def test_getattr_missing_raises(self) -> None:
+        op = Operation(op="add", path="$.x", value=1)
+        with pytest.raises(AttributeError, match="no attribute"):
+            _ = op.nonexistent
+
+    def test_getattr_spec_property_takes_precedence(self) -> None:
+        """Class properties (op, path, value, old_value) take precedence over __getattr__."""
+        op = Operation(op="add", path="$.x", value=1)
+        assert op.op == "add"  # via @property, not __getattr__
+        assert op.path == "$.x"
+
+    # -- __dir__ ------------------------------------------------------------
+
+    def test_dir_includes_extensions(self) -> None:
+        op = Operation(op="add", path="$.x", value=1, x_editor="admin")
+        d = dir(op)
+        assert "x_editor" in d
+        assert "op" in d  # class attributes still present
+
+    # -- extensions property ------------------------------------------------
+
+    def test_extensions_returns_non_spec_keys(self) -> None:
+        op = Operation(op="add", path="$.x", value=1, x_editor="admin", x_ts="2024-01-01")
+        assert op.extensions == {"x_editor": "admin", "x_ts": "2024-01-01"}
+
+    def test_extensions_empty(self) -> None:
+        op = Operation(op="add", path="$.x", value=1)
+        assert op.extensions == {}
+
+    def test_extensions_excludes_spec_keys(self) -> None:
+        op = Operation(op="replace", path="$.x", value=2, oldValue=1, x_reason="fix")
+        assert "op" not in op.extensions
+        assert "path" not in op.extensions
+        assert "value" not in op.extensions
+        assert "oldValue" not in op.extensions
+        assert op.extensions == {"x_reason": "fix"}
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +539,78 @@ class TestDelta:
         assert isinstance(delta, Delta)
         assert delta.format == "json-delta"
         assert delta.operations[0].op == "add"
+
+    # -- Delta.from_dict() --------------------------------------------------
+
+    def test_from_dict_valid(self) -> None:
+        raw = {
+            "format": "json-delta",
+            "version": 1,
+            "operations": [{"op": "add", "path": "$.x", "value": 1}],
+        }
+        delta = Delta.from_dict(raw)
+        assert isinstance(delta, Delta)
+        assert delta.format == "json-delta"
+        assert len(delta.operations) == 1
+        assert isinstance(delta.operations[0], Operation)
+
+    def test_from_dict_with_extensions(self) -> None:
+        raw = {
+            "format": "json-delta",
+            "version": 1,
+            "operations": [],
+            "x_agent": "test",
+        }
+        delta = Delta.from_dict(raw)
+        assert delta["x_agent"] == "test"
+
+    def test_from_dict_missing_operations(self) -> None:
+        with pytest.raises(ValueError, match="missing keys.*operations"):
+            Delta.from_dict({"format": "json-delta", "version": 1})
+
+    def test_from_dict_missing_format(self) -> None:
+        with pytest.raises(ValueError, match="missing keys.*format"):
+            Delta.from_dict({"version": 1, "operations": []})
+
+    def test_from_dict_empty_dict(self) -> None:
+        with pytest.raises(ValueError, match="missing keys"):
+            Delta.from_dict({})
+
+    # -- __getattr__ (extension attribute access) ---------------------------
+
+    def test_delta_getattr_extension(self) -> None:
+        delta = Delta.create(Operation.add("$.x", 1), x_agent="test-agent")
+        assert delta.x_agent == "test-agent"
+
+    def test_delta_getattr_missing_raises(self) -> None:
+        delta = Delta.create()
+        with pytest.raises(AttributeError, match="no attribute"):
+            _ = delta.nonexistent
+
+    # -- __dir__ ------------------------------------------------------------
+
+    def test_delta_dir_includes_extensions(self) -> None:
+        delta = Delta.create(x_agent="test")
+        d = dir(delta)
+        assert "x_agent" in d
+        assert "operations" in d
+
+    # -- extensions property ------------------------------------------------
+
+    def test_delta_extensions(self) -> None:
+        delta = Delta.create(Operation.add("$.x", 1), x_agent="test", x_ts="2024-01-01")
+        assert delta.extensions == {"x_agent": "test", "x_ts": "2024-01-01"}
+
+    def test_delta_extensions_empty(self) -> None:
+        delta = Delta.create()
+        assert delta.extensions == {}
+
+    def test_delta_extensions_excludes_spec_keys(self) -> None:
+        delta = Delta.create(Operation.add("$.x", 1), x_meta="info")
+        assert "format" not in delta.extensions
+        assert "version" not in delta.extensions
+        assert "operations" not in delta.extensions
+        assert delta.extensions == {"x_meta": "info"}
 
     # -- Delta.create() factory ---------------------------------------------
 
