@@ -19,21 +19,22 @@ uv build                         # Build wheel + sdist
 src/json_delta/
     __init__.py       # Public API re-exports and __all__
     errors.py         # Exception hierarchy (JsonDeltaError → PathError, ApplyError, etc.)
-    models.py         # Frozen dataclass types: PathSegment variants, ValidationResult
+    models.py         # PathSegment dataclasses, ValidationResult, Delta/Operation dict subclasses
     _utils.py         # Internal helpers: json_equal, json_type_of
-    path.py           # Path parser (parse_path) and builder (build_path)
+    path.py           # Path parser/builder + describe_path, resolve_path
     validate.py       # Structural validation (validate_delta)
     apply.py          # Delta application (apply_delta)
     invert.py         # Delta inversion (invert_delta, revert_delta)
     diff.py           # Delta computation (diff_delta)
+    json_patch.py     # JSON Patch (RFC 6902) interop: to_json_patch, from_json_patch
     py.typed          # PEP 561 marker
 
 tests/
     conftest.py       # Shared helpers: load_fixture, deep_clone
     fixtures/         # Conformance fixtures from json-delta-format repo
-    test_models.py    # Model construction, equality, hashing
+    test_models.py    # PathSegment, ValidationResult, Delta/Operation types
     test_utils.py     # json_equal edge cases (bool vs int, int vs float)
-    test_path.py      # Path parser/builder (~110 tests)
+    test_path.py      # Path parser/builder, describe_path, resolve_path
     test_validate.py  # Delta validation
     test_apply.py     # Delta application + Level 1 conformance
     test_invert.py    # Inversion + revert round-trips
@@ -41,15 +42,17 @@ tests/
     test_conformance.py # Level 1 + Level 2 conformance fixtures
     test_diff.py      # Diff computation + all array identity models
     test_edge_cases.py  # Cross-module edge cases
+    test_json_patch.py  # JSON Patch (RFC 6902) interop
 ```
 
 ## Architecture
 
 - **Zero runtime dependencies** — uses only stdlib (re, copy, math, dataclasses)
-- **Deltas are plain dicts** — no custom classes for delta documents
+- **Delta/Operation are dict subclasses** — typed property access (`delta.operations`, `op.path`) + full dict compat (`json.dumps`, `[]` access, extensions)
 - **Path segments are frozen dataclasses** — immutable, hashable, printable
 - **apply_delta mutates in place** — always use the return value (root ops return new objects)
 - **json_equal handles Python's bool⊂int** — `True != 1` in JSON semantics
+- **Extension properties** accessed via dict syntax: `op["x_editor"]`. For typed extensions, subclass Operation/Delta
 
 ## Spec Compliance
 

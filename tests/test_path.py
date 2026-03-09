@@ -12,9 +12,11 @@ from json_delta.models import (
 )
 from json_delta.path import (
     build_path,
+    describe_path,
     format_filter_literal,
     parse_filter_literal,
     parse_path,
+    resolve_path,
 )
 
 
@@ -476,3 +478,119 @@ class TestNonCanonicalNormalization:
         """$['a.b'] stays as $['a.b']."""
         segments = parse_path("$['a.b']")
         assert build_path(segments) == "$['a.b']"
+
+
+# ---------------------------------------------------------------------------
+# describe_path
+# ---------------------------------------------------------------------------
+
+
+class TestDescribePath:
+    def test_root(self) -> None:
+        assert describe_path("$") == "(root)"
+
+    def test_single_property(self) -> None:
+        assert describe_path("$.name") == "name"
+
+    def test_nested_properties(self) -> None:
+        assert describe_path("$.user.name") == "user > name"
+
+    def test_deep_properties(self) -> None:
+        assert describe_path("$.a.b.c.d") == "a > b > c > d"
+
+    def test_array_index(self) -> None:
+        assert describe_path("$.items[0].name") == "items[0] > name"
+
+    def test_key_filter_string(self) -> None:
+        assert describe_path("$.items[?(@.id=='1')].name") == "items[id='1'] > name"
+
+    def test_key_filter_number(self) -> None:
+        assert describe_path("$.items[?(@.id==42)].price") == "items[id=42] > price"
+
+    def test_value_filter(self) -> None:
+        assert describe_path("$.tags[?(@=='urgent')]") == "tags[='urgent']"
+
+    def test_bracket_property(self) -> None:
+        assert describe_path("$['a.b'].value") == "a.b > value"
+
+    def test_nested_filters(self) -> None:
+        result = describe_path("$.articles[?(@.id=='art-3')].clauses[?(@.id=='cl-1')].text")
+        assert result == "articles[id='art-3'] > clauses[id='cl-1'] > text"
+
+    def test_filter_only(self) -> None:
+        assert describe_path("$.items[?(@.id==1)]") == "items[id=1]"
+
+    def test_malformed_path_raises(self) -> None:
+        with pytest.raises(PathError):
+            describe_path("")
+
+
+# ---------------------------------------------------------------------------
+# resolve_path
+# ---------------------------------------------------------------------------
+
+
+class TestResolvePath:
+    def test_root(self) -> None:
+        assert resolve_path("$", {"x": 1}) == ""
+
+    def test_single_property(self) -> None:
+        assert resolve_path("$.name", {"name": "Alice"}) == "/name"
+
+    def test_nested_properties(self) -> None:
+        doc = {"user": {"name": "Alice"}}
+        assert resolve_path("$.user.name", doc) == "/user/name"
+
+    def test_array_index(self) -> None:
+        doc = {"items": ["a", "b", "c"]}
+        assert resolve_path("$.items[0]", doc) == "/items/0"
+
+    def test_key_filter(self) -> None:
+        doc = {"items": [{"id": 1, "name": "Widget"}, {"id": 2, "name": "Gadget"}]}
+        assert resolve_path("$.items[?(@.id==1)].name", doc) == "/items/0/name"
+        assert resolve_path("$.items[?(@.id==2)].name", doc) == "/items/1/name"
+
+    def test_key_filter_string_key(self) -> None:
+        doc = {"items": [{"id": "a"}, {"id": "b"}]}
+        assert resolve_path("$.items[?(@.id=='b')]", doc) == "/items/1"
+
+    def test_value_filter(self) -> None:
+        doc = {"tags": ["urgent", "review", "draft"]}
+        assert resolve_path("$.tags[?(@=='review')]", doc) == "/tags/1"
+
+    def test_nested_filters(self) -> None:
+        doc = {
+            "articles": [
+                {"id": "art-1", "clauses": [{"id": "cl-1", "text": "hello"}]},
+                {"id": "art-2", "clauses": [{"id": "cl-2", "text": "world"}]},
+            ]
+        }
+        assert resolve_path("$.articles[?(@.id=='art-2')].clauses[?(@.id=='cl-2')].text", doc) == "/articles/1/clauses/0/text"
+
+    def test_json_pointer_escaping_tilde(self) -> None:
+        doc = {"a~b": 1}
+        assert resolve_path("$['a~b']", doc) == "/a~0b"
+
+    def test_json_pointer_escaping_slash(self) -> None:
+        doc = {"a/b": 1}
+        assert resolve_path("$['a/b']", doc) == "/a~1b"
+
+    def test_key_filter_no_match_raises(self) -> None:
+        doc = {"items": [{"id": 1}]}
+        with pytest.raises(PathError, match="matched zero elements"):
+            resolve_path("$.items[?(@.id==99)]", doc)
+
+    def test_value_filter_no_match_raises(self) -> None:
+        doc = {"tags": ["a", "b"]}
+        with pytest.raises(PathError, match="matched zero elements"):
+            resolve_path("$.tags[?(@=='missing')]", doc)
+
+    def test_key_filter_multiple_match_raises(self) -> None:
+        doc = {"items": [{"id": 1}, {"id": 1}]}
+        with pytest.raises(PathError, match="matched 2 elements"):
+            resolve_path("$.items[?(@.id==1)]", doc)
+
+    def test_filter_on_non_array_raises(self) -> None:
+        doc = {"items": "not-an-array"}
+        with pytest.raises(PathError, match="expected array"):
+            resolve_path("$.items[?(@.id==1)]", doc)

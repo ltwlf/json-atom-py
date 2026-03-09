@@ -9,6 +9,7 @@ from typing import Any
 
 from json_delta.apply import apply_delta
 from json_delta.errors import InvertError
+from json_delta.models import Delta, Operation
 from json_delta.validate import validate_delta
 
 # Fields defined by the spec for operations — everything else is an extension
@@ -18,12 +19,12 @@ _OP_SPEC_FIELDS = {"op", "path", "value", "oldValue"}
 _ENVELOPE_SPEC_FIELDS = {"format", "version", "operations"}
 
 
-def invert_delta(delta: dict[str, Any]) -> dict[str, Any]:
+def invert_delta(delta: Delta) -> Delta:
     """Compute the inverse of a reversible delta.
 
     The inverse delta, when applied to the target document, recovers the source.
 
-    Requires all `replace` and `remove` operations to have `oldValue`.
+    Requires all ``replace`` and ``remove`` operations to have ``oldValue``.
     Preserves extension properties at both envelope and operation levels.
 
     Raises InvertError if the delta is not reversible or structurally invalid.
@@ -42,7 +43,7 @@ def invert_delta(delta: dict[str, Any]) -> dict[str, Any]:
             raise InvertError(f"operations[{i}]: '{op_type}' operation missing 'oldValue' (required for inversion)")
 
     # Build inverted operations in reverse order (spec Section 9.2)
-    inverted_ops: list[dict[str, Any]] = []
+    inverted_ops: list[Operation] = []
     for op in reversed(operations):
         inverted_ops.append(_invert_operation(op))
 
@@ -55,10 +56,10 @@ def invert_delta(delta: dict[str, Any]) -> dict[str, Any]:
     inverse["version"] = delta["version"]
     inverse["operations"] = inverted_ops
 
-    return inverse
+    return Delta(inverse)
 
 
-def _invert_operation(op: dict[str, Any]) -> dict[str, Any]:
+def _invert_operation(op: Operation) -> Operation:
     """Invert a single operation, preserving extension properties.
 
     Transformation rules (spec Section 9.2):
@@ -91,7 +92,7 @@ def _invert_operation(op: dict[str, Any]) -> dict[str, Any]:
         inverted["value"] = op["oldValue"]
         inverted["oldValue"] = op["value"]
 
-    return inverted
+    return Operation(inverted)
 
 
 def _inverted_op_type(op_type: str) -> str:
@@ -103,7 +104,7 @@ def _inverted_op_type(op_type: str) -> str:
     return op_type  # replace stays replace
 
 
-def revert_delta(obj: Any, delta: dict[str, Any]) -> Any:
+def revert_delta(obj: Any, delta: Delta) -> Any:
     """Revert a delta by computing the inverse and applying it.
 
     Convenience wrapper: equivalent to `apply_delta(obj, invert_delta(delta))`.

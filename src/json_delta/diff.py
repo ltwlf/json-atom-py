@@ -12,8 +12,10 @@ from typing import Any
 from json_delta._utils import json_equal
 from json_delta.errors import DiffError
 from json_delta.models import (
+    Delta,
     IndexSegment,
     KeyFilterSegment,
+    Operation,
     PropertySegment,
     ValueFilterSegment,
 )
@@ -28,7 +30,7 @@ def diff_delta(
     *,
     array_keys: dict[str, str] | None = None,
     reversible: bool = True,
-) -> dict[str, Any]:
+) -> Delta:
     """Compute a JSON Delta between two objects.
 
     Args:
@@ -41,7 +43,7 @@ def diff_delta(
         reversible: If True (default), include ``oldValue`` on replace/remove.
 
     Returns:
-        A JSON Delta document (dict with format, version, operations).
+        A :class:`Delta` document with typed :class:`Operation` instances.
 
     Raises:
         DiffError: If the input contains non-JSON values.
@@ -49,14 +51,14 @@ def diff_delta(
     _validate_json_value(old_obj, "old_obj")
     _validate_json_value(new_obj, "new_obj")
 
-    operations: list[dict[str, Any]] = []
+    operations: list[Operation] = []
     _diff_values(old_obj, new_obj, [], [], array_keys or {}, reversible, operations)
 
-    return {
+    return Delta({
         "format": "json-delta",
         "version": 1,
         "operations": operations,
-    }
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +73,7 @@ def _diff_values(
     prop_path: list[str],
     array_keys: dict[str, str],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Recursively compare two values and emit operations."""
     if json_equal(old, new):
@@ -99,7 +101,7 @@ def _diff_objects(
     prop_path: list[str],
     array_keys: dict[str, str],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Compare two objects and emit add/remove/replace operations."""
     all_keys = sorted(set(old.keys()) | set(new.keys()))
@@ -124,7 +126,7 @@ def _diff_arrays(
     prop_path: list[str],
     array_keys: dict[str, str],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Compare two arrays using the appropriate identity model."""
     path_key = ".".join(prop_path)
@@ -150,7 +152,7 @@ def _diff_arrays_index(
     prop_path: list[str],
     array_keys: dict[str, str],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Compare arrays by positional index."""
     min_len = min(len(old), len(new))
@@ -187,7 +189,7 @@ def _diff_arrays_keyed(
     array_keys: dict[str, str],
     identity_key: str,
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Compare arrays by a key property on each element."""
     old_by_key: dict[Any, dict[str, Any]] = {}
@@ -246,7 +248,7 @@ def _diff_keyed_element(
     prop_path: list[str],
     array_keys: dict[str, str],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Diff two keyed-array elements, emitting property-level operations."""
     all_keys = sorted(set(old_elem.keys()) | set(new_elem.keys()))
@@ -276,7 +278,7 @@ def _diff_arrays_value(
     new: list[Any],
     segments: list[_Segment],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Compare arrays by element value (for primitive arrays)."""
     # Find removed values (in old but not in new)
@@ -314,38 +316,38 @@ def _emit_replace(
     new_val: Any,
     segments: list[_Segment],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Emit a replace operation."""
     path = build_path(segments)
-    op: dict[str, Any] = {"op": "replace", "path": path, "value": new_val}
     if reversible:
-        op["oldValue"] = old_val
-    operations.append(op)
+        operations.append(Operation(op="replace", path=path, value=new_val, oldValue=old_val))
+    else:
+        operations.append(Operation(op="replace", path=path, value=new_val))
 
 
 def _emit_add(
     value: Any,
     segments: list[_Segment],
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Emit an add operation."""
     path = build_path(segments)
-    operations.append({"op": "add", "path": path, "value": value})
+    operations.append(Operation(op="add", path=path, value=value))
 
 
 def _emit_remove(
     old_val: Any,
     segments: list[_Segment],
     reversible: bool,
-    operations: list[dict[str, Any]],
+    operations: list[Operation],
 ) -> None:
     """Emit a remove operation."""
     path = build_path(segments)
-    op: dict[str, Any] = {"op": "remove", "path": path}
     if reversible:
-        op["oldValue"] = old_val
-    operations.append(op)
+        operations.append(Operation(op="remove", path=path, oldValue=old_val))
+    else:
+        operations.append(Operation(op="remove", path=path))
 
 
 # ---------------------------------------------------------------------------

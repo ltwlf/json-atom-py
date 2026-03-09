@@ -15,25 +15,32 @@ from json_delta.errors import (
     ValidationError,
 )
 from json_delta.invert import invert_delta, revert_delta
+from json_delta.json_patch import from_json_patch, to_json_patch
 from json_delta.models import (
+    Delta,
     IndexSegment,
     KeyFilterSegment,
+    Operation,
+    OpType,
     PathSegment,
     PropertySegment,
     RootSegment,
     ValidationResult,
     ValueFilterSegment,
 )
-from json_delta.path import build_path, parse_path
+from json_delta.path import build_path, describe_path, parse_path, resolve_path
 from json_delta.validate import validate_delta
 
 __all__ = [
     "ApplyError",
+    "Delta",
     "DiffError",
     "IndexSegment",
     "InvertError",
     "JsonDeltaError",
     "KeyFilterSegment",
+    "OpType",
+    "Operation",
     "PathError",
     "PathSegment",
     "PropertySegment",
@@ -43,9 +50,13 @@ __all__ = [
     "ValueFilterSegment",
     "apply_delta",
     "build_path",
+    "describe_path",
     "diff_delta",
+    "from_json_patch",
     "invert_delta",
     "parse_path",
+    "resolve_path",
     "revert_delta",
+    "to_json_patch",
     "validate_delta",
 ]

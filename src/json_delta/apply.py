@@ -11,8 +11,10 @@ from typing import Any
 from json_delta._utils import json_equal
 from json_delta.errors import ApplyError
 from json_delta.models import (
+    Delta,
     IndexSegment,
     KeyFilterSegment,
+    Operation,
     PropertySegment,
     ValueFilterSegment,
 )
@@ -20,7 +22,7 @@ from json_delta.path import parse_path
 from json_delta.validate import validate_delta
 
 
-def apply_delta(obj: Any, delta: dict[str, Any]) -> Any:
+def apply_delta(obj: Any, delta: Delta) -> Any:
     """Apply a JSON Delta to a source object.
 
     Mutates the object in place where possible. Always use the return value,
@@ -45,7 +47,7 @@ def apply_delta(obj: Any, delta: dict[str, Any]) -> Any:
     return obj
 
 
-def _apply_operation(obj: Any, op: dict[str, Any]) -> Any:
+def _apply_operation(obj: Any, op: Operation) -> Any:
     """Apply a single operation and return the (possibly new) root object."""
     op_type = op["op"]
     path_str = op["path"]
@@ -77,7 +79,7 @@ def _apply_operation(obj: Any, op: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _apply_root_operation(obj: Any, op_type: str, op: dict[str, Any]) -> Any:
+def _apply_root_operation(obj: Any, op_type: str, op: Operation) -> Any:
     """Handle operations on the root path '$'."""
     if op_type == "add":
         if obj is not None:
@@ -193,7 +195,7 @@ def _find_value_filter_match(arr: list[Any], seg: ValueFilterSegment, path_str: 
 
 
 def _apply_property_op(
-    parent: Any, name: str, op_type: str, op: dict[str, Any], path_str: str
+    parent: Any, name: str, op_type: str, op: Operation, path_str: str
 ) -> None:
     """Apply an operation on an object property."""
     if not isinstance(parent, dict):
@@ -224,7 +226,7 @@ def _apply_property_op(
 
 
 def _apply_index_op(
-    parent: Any, index: int, op_type: str, op: dict[str, Any], path_str: str
+    parent: Any, index: int, op_type: str, op: Operation, path_str: str
 ) -> None:
     """Apply an operation on an array index."""
     if not isinstance(parent, list):

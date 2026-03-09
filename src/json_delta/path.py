@@ -280,6 +280,154 @@ def parse_path(
     return segments
 
 
+def describe_path(path: str) -> str:
+    """Generate a human-readable description of a JSON Delta path.
+
+    Parses the path into typed segments and formats each readably.
+
+    Examples::
+
+        "$"                              → "(root)"
+        "$.user.name"                    → "user > name"
+        "$.items[?(@.id=='1')].name"     → "items[id='1'] > name"
+        "$.items[0].name"                → "items[0] > name"
+        "$.tags[?(@=='urgent')]"         → "tags[='urgent']"
+        "$['a.b'].value"                 → "a.b > value"
+
+    Raises:
+        PathError: If the path is malformed.
+    """
+    segments = parse_path(path)
+
+    if not segments:
+        return "(root)"
+
+    parts: list[str] = []
+    for seg in segments:
+        if isinstance(seg, RootSegment):
+            continue
+        elif isinstance(seg, PropertySegment):
+            parts.append(seg.name)
+        elif isinstance(seg, IndexSegment):
+            if parts:
+                parts[-1] = f"{parts[-1]}[{seg.index}]"
+            else:
+                parts.append(f"[{seg.index}]")
+        elif isinstance(seg, KeyFilterSegment):
+            literal = format_filter_literal(seg.value)
+            if parts:
+                parts[-1] = f"{parts[-1]}[{seg.property}={literal}]"
+            else:
+                parts.append(f"[{seg.property}={literal}]")
+        elif isinstance(seg, ValueFilterSegment):
+            literal = format_filter_literal(seg.value)
+            if parts:
+                parts[-1] = f"{parts[-1]}[={literal}]"
+            else:
+                parts.append(f"[={literal}]")
+
+    return " > ".join(parts) if parts else "(root)"
+
+
+def resolve_path(path: str, document: Any) -> str:
+    """Resolve a JSON Delta path to an RFC 6901 JSON Pointer.
+
+    Walks the path segments against the document, resolving filter expressions
+    to positional indices. Property and index segments pass through directly.
+
+    Args:
+        path: A JSON Delta path string (e.g., ``"$.items[?(@.id=='1')].name"``).
+        document: The document to resolve against.
+
+    Returns:
+        An RFC 6901 JSON Pointer (e.g., ``"/items/0/name"``).
+        Returns ``""`` for the root path ``"$"``.
+
+    Raises:
+        PathError: If the path is malformed or a filter matches zero or
+            multiple elements.
+    """
+    segments = parse_path(path)
+
+    if not segments:
+        return ""
+
+    pointer_parts: list[str] = []
+    current: Any = document
+
+    for seg in segments:
+        if isinstance(seg, RootSegment):
+            continue
+        elif isinstance(seg, PropertySegment):
+            pointer_parts.append(_escape_json_pointer(seg.name))
+            current = current.get(seg.name) if isinstance(current, dict) else None
+        elif isinstance(seg, IndexSegment):
+            pointer_parts.append(str(seg.index))
+            current = current[seg.index] if isinstance(current, list) and seg.index < len(current) else None
+        elif isinstance(seg, KeyFilterSegment):
+            idx = _resolve_key_filter(current, seg)
+            pointer_parts.append(str(idx))
+            current = current[idx]
+        elif isinstance(seg, ValueFilterSegment):
+            idx = _resolve_value_filter(current, seg)
+            pointer_parts.append(str(idx))
+            current = current[idx]
+
+    return "/" + "/".join(pointer_parts) if pointer_parts else ""
+
+
+def _escape_json_pointer(segment: str) -> str:
+    """Escape a string for use in a JSON Pointer (RFC 6901 §3).
+
+    ``~`` → ``~0``, ``/`` → ``~1``.
+    """
+    return segment.replace("~", "~0").replace("/", "~1")
+
+
+def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
+    """Find exactly one element matching a key filter. Returns its index."""
+    if not isinstance(arr, list):
+        raise PathError(f"Cannot apply key filter on {type(arr).__name__}: expected array")
+
+    from json_delta._utils import json_equal
+
+    matches: list[int] = []
+    for idx, elem in enumerate(arr):
+        if isinstance(elem, dict) and seg.property in elem and json_equal(elem[seg.property], seg.value):
+            matches.append(idx)
+
+    if len(matches) == 0:
+        literal = format_filter_literal(seg.value)
+        raise PathError(f"Key filter [?(@.{seg.property}=={literal})] matched zero elements")
+    if len(matches) > 1:
+        literal = format_filter_literal(seg.value)
+        raise PathError(
+            f"Key filter [?(@.{seg.property}=={literal})] matched {len(matches)} elements (must be exactly one)"
+        )
+    return matches[0]
+
+
+def _resolve_value_filter(arr: Any, seg: ValueFilterSegment) -> int:
+    """Find exactly one element matching a value filter. Returns its index."""
+    if not isinstance(arr, list):
+        raise PathError(f"Cannot apply value filter on {type(arr).__name__}: expected array")
+
+    from json_delta._utils import json_equal
+
+    matches: list[int] = []
+    for idx, elem in enumerate(arr):
+        if json_equal(elem, seg.value):
+            matches.append(idx)
+
+    if len(matches) == 0:
+        literal = format_filter_literal(seg.value)
+        raise PathError(f"Value filter [?(@=={literal})] matched zero elements")
+    if len(matches) > 1:
+        literal = format_filter_literal(seg.value)
+        raise PathError(f"Value filter [?(@=={literal})] matched {len(matches)} elements (must be exactly one)")
+    return matches[0]
+
+
 def build_path(
     segments: Sequence[RootSegment | PropertySegment | IndexSegment | KeyFilterSegment | ValueFilterSegment],
 ) -> str:
