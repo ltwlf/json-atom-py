@@ -123,7 +123,10 @@ def _diff_objects(
         elif key not in old and key in new:
             _emit_add(new[key], child_segments, operations)
         else:
-            _diff_values(old[key], new[key], child_segments, child_prop_path, array_keys, exclude, reversible, operations)
+            _diff_values(
+                old[key], new[key], child_segments, child_prop_path,
+                array_keys, exclude, reversible, operations,
+            )
 
 
 def _diff_arrays(
@@ -275,7 +278,8 @@ def _diff_keyed_element(
             _emit_add(new_elem[key], child_segments, operations)
         else:
             _diff_values(
-                old_elem[key], new_elem[key], child_segments, child_prop_path, array_keys, exclude, reversible, operations
+                old_elem[key], new_elem[key], child_segments, child_prop_path,
+                array_keys, exclude, reversible, operations,
             )
 
 
