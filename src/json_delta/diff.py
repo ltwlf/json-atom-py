@@ -445,14 +445,19 @@ def _check_value_duplicates(arr: list[Any], label: str, path_str: str) -> None:
 
     Value filters require each element to match exactly one position,
     so duplicates make the resulting delta paths ambiguous.
+
+    Uses ``make_hashable`` for O(n) duplicate detection while keeping
+    bool/int distinct (JSON semantics).
     """
-    for i, val_a in enumerate(arr):
-        for j in range(i + 1, len(arr)):
-            if json_equal(val_a, arr[j]):
-                raise DiffError(
-                    f"Duplicate value {val_a!r} in {label} array at {path_str}; "
-                    f"$value identity requires unique elements"
-                )
+    seen: set[Any] = set()
+    for val in arr:
+        key = make_hashable(val)
+        if key in seen:
+            raise DiffError(
+                f"Duplicate value {val!r} in {label} array at {path_str}; "
+                f"$value identity requires unique elements"
+            )
+        seen.add(key)
 
 
 

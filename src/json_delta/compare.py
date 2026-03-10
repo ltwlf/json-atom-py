@@ -81,7 +81,7 @@ def _compare_values(
 ) -> ComparisonNode:
     """Recursively compare two values and produce a ComparisonNode."""
     if json_equal(old, new):
-        return _enrich_unchanged(old)
+        return _enrich_unchanged(old, prop_path, exclude, exclude_paths)
 
     old_is_dict = isinstance(old, dict) and not isinstance(old, bool)
     new_is_dict = isinstance(new, dict) and not isinstance(new, bool)
@@ -97,17 +97,29 @@ def _compare_values(
     return ComparisonNode(type=ChangeType.REPLACED, value=new, old_value=old)
 
 
-def _enrich_unchanged(value: Any) -> ComparisonNode:
+def _enrich_unchanged(
+    value: Any,
+    prop_path: list[str],
+    exclude: frozenset[str],
+    exclude_paths: frozenset[str],
+) -> ComparisonNode:
     """Wrap an unchanged value as a ComparisonNode tree.
 
     Containers get ``ChangeType.CONTAINER`` with per-child nodes.
     Leaves get ``ChangeType.UNCHANGED``.
+    Excluded keys and paths are filtered out so they never appear in the tree.
     """
     if isinstance(value, dict) and not isinstance(value, bool):
-        obj_children = {k: _enrich_unchanged(v) for k, v in value.items()}
+        obj_children: dict[str, ComparisonNode] = {}
+        for k, v in value.items():
+            if k in exclude:
+                continue
+            if should_exclude_path(prop_path, k, exclude_paths):
+                continue
+            obj_children[k] = _enrich_unchanged(v, [*prop_path, k], exclude, exclude_paths)
         return ComparisonNode(type=ChangeType.CONTAINER, value=obj_children)
     if isinstance(value, list):
-        arr_children = [_enrich_unchanged(v) for v in value]
+        arr_children = [_enrich_unchanged(v, prop_path, exclude, exclude_paths) for v in value]
         return ComparisonNode(type=ChangeType.CONTAINER, value=arr_children)
     return ComparisonNode(type=ChangeType.UNCHANGED, value=value)
 
@@ -133,13 +145,14 @@ def _compare_objects(
         if should_exclude_path(prop_path, key, exclude_paths):
             continue
 
+        child_path = [*prop_path, key]
         if key in old and key not in new:
-            children[key] = _enrich_removed(old[key])
+            children[key] = _enrich_removed(old[key], child_path, exclude, exclude_paths)
         elif key not in old and key in new:
-            children[key] = _enrich_added(new[key])
+            children[key] = _enrich_added(new[key], child_path, exclude, exclude_paths)
         else:
             children[key] = _compare_values(
-                old[key], new[key], [*prop_path, key], identity_keys, exclude, exclude_paths,
+                old[key], new[key], child_path, identity_keys, exclude, exclude_paths,
             )
 
     return ComparisonNode(type=ChangeType.CONTAINER, value=children)
@@ -164,7 +177,7 @@ def _compare_arrays(
     if identity.mode == "$index":
         return _compare_arrays_index(old, new, prop_path, identity_keys, exclude, exclude_paths)
     elif identity.mode == "$value":
-        return _compare_arrays_value(old, new)
+        return _compare_arrays_value(old, new, prop_path, exclude, exclude_paths)
     else:
         return _compare_arrays_keyed(old, new, prop_path, identity_keys, exclude, exclude_paths, identity)
 
@@ -185,9 +198,9 @@ def _compare_arrays_index(
         if i < len(old) and i < len(new):
             children.append(_compare_values(old[i], new[i], prop_path, identity_keys, exclude, exclude_paths))
         elif i >= len(old):
-            children.append(_enrich_added(new[i]))
+            children.append(_enrich_added(new[i], prop_path, exclude, exclude_paths))
         else:
-            children.append(_enrich_removed(old[i]))
+            children.append(_enrich_removed(old[i], prop_path, exclude, exclude_paths))
 
     return ComparisonNode(type=ChangeType.CONTAINER, value=children)
 
@@ -245,12 +258,12 @@ def _compare_arrays_keyed(
                                 prop_path, identity_keys, exclude, exclude_paths)
             )
         else:
-            children.append(_enrich_added(new_by_key[hashable_key]))
+            children.append(_enrich_added(new_by_key[hashable_key], prop_path, exclude, exclude_paths))
 
     # Items removed (in old but not in new)
     for hashable_key in old_order:
         if hashable_key not in new_by_key:
-            children.append(_enrich_removed(old_by_key[hashable_key]))
+            children.append(_enrich_removed(old_by_key[hashable_key], prop_path, exclude, exclude_paths))
 
     return ComparisonNode(type=ChangeType.CONTAINER, value=children)
 
@@ -258,6 +271,9 @@ def _compare_arrays_keyed(
 def _compare_arrays_value(
     old: list[Any],
     new: list[Any],
+    prop_path: list[str],
+    exclude: frozenset[str],
+    exclude_paths: frozenset[str],
 ) -> ComparisonNode:
     """Compare arrays by value identity (for primitive arrays)."""
     children: list[ComparisonNode] = []
@@ -272,12 +288,12 @@ def _compare_arrays_value(
             old_matched[match_idx] = True
             children.append(ComparisonNode(type=ChangeType.UNCHANGED, value=new_val))
         else:
-            children.append(_enrich_added(new_val))
+            children.append(_enrich_added(new_val, prop_path, exclude, exclude_paths))
 
     # Unmatched old values are removed
     for i, old_val in enumerate(old):
         if not old_matched[i]:
-            children.append(_enrich_removed(old_val))
+            children.append(_enrich_removed(old_val, prop_path, exclude, exclude_paths))
 
     return ComparisonNode(type=ChangeType.CONTAINER, value=children)
 
@@ -302,32 +318,56 @@ def _find_unmatched(
     return None
 
 
-def _enrich_added(value: Any) -> ComparisonNode:
+def _enrich_added(
+    value: Any,
+    prop_path: list[str],
+    exclude: frozenset[str],
+    exclude_paths: frozenset[str],
+) -> ComparisonNode:
     """Wrap an added value as a ComparisonNode tree.
 
     Containers become ``CONTAINER`` nodes with all descendants marked ``ADDED``.
     Scalars become ``ADDED`` leaf nodes.
+    Excluded keys and paths are filtered out.
     """
     if isinstance(value, dict) and not isinstance(value, bool):
-        children = {k: _enrich_added(v) for k, v in value.items()}
+        children: dict[str, ComparisonNode] = {}
+        for k, v in value.items():
+            if k in exclude:
+                continue
+            if should_exclude_path(prop_path, k, exclude_paths):
+                continue
+            children[k] = _enrich_added(v, [*prop_path, k], exclude, exclude_paths)
         return ComparisonNode(type=ChangeType.CONTAINER, value=children)
     if isinstance(value, list):
-        children_list = [_enrich_added(v) for v in value]
+        children_list = [_enrich_added(v, prop_path, exclude, exclude_paths) for v in value]
         return ComparisonNode(type=ChangeType.CONTAINER, value=children_list)
     return ComparisonNode(type=ChangeType.ADDED, value=value)
 
 
-def _enrich_removed(value: Any) -> ComparisonNode:
+def _enrich_removed(
+    value: Any,
+    prop_path: list[str],
+    exclude: frozenset[str],
+    exclude_paths: frozenset[str],
+) -> ComparisonNode:
     """Wrap a removed value as a ComparisonNode tree.
 
     Containers become ``CONTAINER`` nodes with all descendants marked ``REMOVED``.
     Scalars become ``REMOVED`` leaf nodes.
+    Excluded keys and paths are filtered out.
     """
     if isinstance(value, dict) and not isinstance(value, bool):
-        children = {k: _enrich_removed(v) for k, v in value.items()}
+        children: dict[str, ComparisonNode] = {}
+        for k, v in value.items():
+            if k in exclude:
+                continue
+            if should_exclude_path(prop_path, k, exclude_paths):
+                continue
+            children[k] = _enrich_removed(v, [*prop_path, k], exclude, exclude_paths)
         return ComparisonNode(type=ChangeType.CONTAINER, value=children)
     if isinstance(value, list):
-        children_list = [_enrich_removed(v) for v in value]
+        children_list = [_enrich_removed(v, prop_path, exclude, exclude_paths) for v in value]
         return ComparisonNode(type=ChangeType.CONTAINER, value=children_list)
     return ComparisonNode(type=ChangeType.REMOVED, old_value=value)
 

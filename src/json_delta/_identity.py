@@ -35,8 +35,9 @@ class IdentityResolver:
         # Simple key: use the ``id`` field directly
         IdentityResolver("id", lambda e: e["id"])
 
-        # Normalized identity: ensure ids are always strings
-        IdentityResolver("id", lambda e: str(e["id"]))
+        # Validation: coerce to int, ensuring consistency
+        # (only safe when the stored value round-trips through int)
+        IdentityResolver("id", lambda e: int(e["id"]))
     """
 
     property: str

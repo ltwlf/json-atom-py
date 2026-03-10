@@ -333,6 +333,37 @@ class TestExcludeKeys:
         assert set(node.value.keys()) == {"a"}
         assert node.value["a"].type == ChangeType.UNCHANGED
 
+    def test_exclude_key_in_unchanged_subtree(self) -> None:
+        """Excluded keys are filtered even when the surrounding object is unchanged."""
+        obj = {"user": {"name": "Alice", "cache": "x"}}
+        node = compare(obj, obj, exclude_keys={"cache"})
+        assert "cache" not in node.value["user"].value
+        assert node.value["user"].value["name"].type == ChangeType.UNCHANGED
+
+    def test_exclude_key_in_added_container(self) -> None:
+        """Excluded keys are filtered inside newly added containers."""
+        node = compare(
+            {},
+            {"user": {"name": "Alice", "cache": "x"}},
+            exclude_keys={"cache"},
+        )
+        user = node.value["user"]
+        assert user.type == ChangeType.CONTAINER
+        assert "cache" not in user.value
+        assert user.value["name"].type == ChangeType.ADDED
+
+    def test_exclude_key_in_removed_container(self) -> None:
+        """Excluded keys are filtered inside removed containers."""
+        node = compare(
+            {"user": {"name": "Alice", "cache": "x"}},
+            {},
+            exclude_keys={"cache"},
+        )
+        user = node.value["user"]
+        assert user.type == ChangeType.CONTAINER
+        assert "cache" not in user.value
+        assert user.value["name"].type == ChangeType.REMOVED
+
 
 class TestExcludePaths:
     def test_exclude_specific_path(self) -> None:
@@ -346,6 +377,36 @@ class TestExcludePaths:
         # product.cache NOT excluded
         assert "cache" in node.value["product"].value
         assert node.value["product"].value["cache"].type == ChangeType.REPLACED
+
+    def test_exclude_path_in_unchanged_subtree(self) -> None:
+        """Excluded paths are filtered even when the surrounding object is unchanged."""
+        obj = {"user": {"name": "Alice", "cache": "x"}, "product": {"cache": "y"}}
+        node = compare(obj, obj, exclude_paths={"user.cache"})
+        assert "cache" not in node.value["user"].value
+        # product.cache should still be present
+        assert "cache" in node.value["product"].value
+
+    def test_exclude_path_in_added_container(self) -> None:
+        """Excluded paths are filtered inside newly added containers."""
+        node = compare(
+            {},
+            {"user": {"name": "Alice", "cache": "x"}},
+            exclude_paths={"user.cache"},
+        )
+        user = node.value["user"]
+        assert "cache" not in user.value
+        assert user.value["name"].type == ChangeType.ADDED
+
+    def test_exclude_path_in_removed_container(self) -> None:
+        """Excluded paths are filtered inside removed containers."""
+        node = compare(
+            {"user": {"name": "Alice", "cache": "x"}},
+            {},
+            exclude_paths={"user.cache"},
+        )
+        user = node.value["user"]
+        assert "cache" not in user.value
+        assert user.value["name"].type == ChangeType.REMOVED
 
     def test_combined_exclude_keys_and_paths(self) -> None:
         node = compare(

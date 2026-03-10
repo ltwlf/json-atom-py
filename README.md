@@ -228,6 +228,10 @@ delta = diff_delta(old, new,
 )
 ```
 
+> **Note:** `exclude_paths` uses `.` as a segment separator, so it cannot
+> unambiguously target keys that literally contain `.`. For such keys, use
+> `exclude_keys` instead (which matches by name regardless of depth).
+
 ### Enriched Comparison Tree
 
 The `compare()` function returns a full comparison tree including unchanged values — ideal for rendering side-by-side diffs or change-highlighted UIs:
