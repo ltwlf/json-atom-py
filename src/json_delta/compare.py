@@ -17,7 +17,7 @@ from json_delta._identity import (
     extract_identity,
     resolve_identity,
 )
-from json_delta._utils import json_equal, make_hashable, should_exclude_path
+from json_delta._utils import json_equal, make_hashable, should_exclude_path, validate_json_value
 from json_delta.errors import DiffError
 from json_delta.models import ChangeType, ComparisonNode
 
@@ -50,6 +50,9 @@ def compare(
         A :class:`ComparisonNode` tree where each node is classified as
         ``unchanged``, ``added``, ``removed``, ``replaced``, or ``container``.
 
+    Raises:
+        DiffError: If the input contains non-JSON values.
+
     Example::
 
         node = compare(
@@ -60,6 +63,8 @@ def compare(
         # node.value["name"].type == ChangeType.REPLACED
         # node.value["age"].type == ChangeType.UNCHANGED
     """
+    validate_json_value(old_obj, "old_obj")
+    validate_json_value(new_obj, "new_obj")
     keys = array_identity_keys or {}
     _exclude: frozenset[str] = frozenset(exclude_keys) if exclude_keys else frozenset()
     _exclude_paths: frozenset[str] = frozenset(exclude_paths) if exclude_paths else frozenset()
@@ -286,7 +291,7 @@ def _compare_arrays_value(
         match_idx = _find_unmatched(new_val, old, old_matched)
         if match_idx is not None:
             old_matched[match_idx] = True
-            children.append(ComparisonNode(type=ChangeType.UNCHANGED, value=new_val))
+            children.append(_enrich_unchanged(new_val, prop_path, exclude, exclude_paths))
         else:
             children.append(_enrich_added(new_val, prop_path, exclude, exclude_paths))
 

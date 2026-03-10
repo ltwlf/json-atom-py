@@ -6,6 +6,7 @@ by key, by value, by index, or by custom callable.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -154,5 +155,10 @@ def extract_identity(
         raise DiffError(
             f"Identity value for '{key_property}' must be a JSON scalar, "
             f"got {type(value).__name__}: {value!r}"
+        )
+    if isinstance(value, float) and not math.isfinite(value):
+        raise DiffError(
+            f"Identity value for '{key_property}' must be a finite number, "
+            f"got {value!r}"
         )
     return value

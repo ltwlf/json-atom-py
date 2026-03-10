@@ -15,7 +15,7 @@ from json_delta._identity import (
     extract_identity,
     resolve_identity,
 )
-from json_delta._utils import json_equal, make_hashable, should_exclude_path
+from json_delta._utils import json_equal, make_hashable, should_exclude_path, validate_json_value
 from json_delta.errors import DiffError
 from json_delta.models import (
     Delta,
@@ -70,8 +70,8 @@ def diff_delta(
     Raises:
         DiffError: If the input contains non-JSON values.
     """
-    _validate_json_value(old_obj, "old_obj")
-    _validate_json_value(new_obj, "new_obj")
+    validate_json_value(old_obj, "old_obj")
+    validate_json_value(new_obj, "new_obj")
 
     _keys = array_identity_keys or {}
     _exclude: frozenset[str] = frozenset(exclude_keys) if exclude_keys else frozenset()
@@ -459,28 +459,3 @@ def _check_value_duplicates(arr: list[Any], label: str, path_str: str) -> None:
             )
         seen.add(key)
 
-
-
-def _validate_json_value(value: Any, name: str) -> None:
-    """Validate that a value is a valid JSON type (recursive)."""
-    if value is None:
-        return
-    if isinstance(value, bool):
-        return
-    if isinstance(value, int):
-        return
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise DiffError(f"Non-finite float in {name}: {value}")
-        return
-    if isinstance(value, str):
-        return
-    if isinstance(value, dict):
-        for v in value.values():
-            _validate_json_value(v, name)
-        return
-    if isinstance(value, list):
-        for item in value:
-            _validate_json_value(item, name)
-        return
-    raise DiffError(f"{name} contains non-JSON type: {type(value).__name__}")

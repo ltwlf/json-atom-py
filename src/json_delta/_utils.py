@@ -1,6 +1,9 @@
 """Internal utility functions for json-delta."""
 
+import math
 from typing import Any
+
+from json_delta.errors import DiffError
 
 
 def json_equal(a: Any, b: Any) -> bool:
@@ -84,3 +87,31 @@ def make_hashable(value: Any) -> Any:
     if isinstance(value, bool):
         return ("__bool__", value)
     return value
+
+
+def validate_json_value(value: Any, name: str) -> None:
+    """Validate that a value is a valid JSON type (recursive).
+
+    Raises DiffError for non-JSON types or non-finite floats.
+    """
+    if value is None:
+        return
+    if isinstance(value, bool):
+        return
+    if isinstance(value, int):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise DiffError(f"Non-finite float in {name}: {value}")
+        return
+    if isinstance(value, str):
+        return
+    if isinstance(value, dict):
+        for v in value.values():
+            validate_json_value(v, name)
+        return
+    if isinstance(value, list):
+        for item in value:
+            validate_json_value(item, name)
+        return
+    raise DiffError(f"{name} contains non-JSON type: {type(value).__name__}")
