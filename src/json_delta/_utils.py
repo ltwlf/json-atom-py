@@ -66,3 +66,21 @@ def json_type_of(value: Any) -> str:
     if isinstance(value, list):
         return "array"
     raise TypeError(f"Not a JSON type: {type(value).__name__}")
+
+
+def should_exclude_path(prop_path: list[str], key: str, exclude_paths: frozenset[str]) -> bool:
+    """Check if a key at the current path should be excluded."""
+    if not exclude_paths:
+        return False
+    return ".".join([*prop_path, key]) in exclude_paths
+
+
+def make_hashable(value: Any) -> Any:
+    """Make a JSON scalar safe for use as a dict key.
+
+    Python considers ``True == 1`` and ``False == 0``, so they collide
+    as dict keys.  We wrap bools in a tagged tuple to preserve identity.
+    """
+    if isinstance(value, bool):
+        return ("__bool__", value)
+    return value

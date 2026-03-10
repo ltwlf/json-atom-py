@@ -435,7 +435,7 @@ class TestDuplicateIdentity:
     def test_duplicate_in_old_array(self) -> None:
         import pytest
         from json_delta.errors import DiffError
-        with pytest.raises(DiffError, match="Duplicate identity"):
+        with pytest.raises(DiffError, match="Duplicate identity.*at items"):
             compare(
                 {"items": [{"id": 1, "v": "a"}, {"id": 1, "v": "b"}]},
                 {"items": [{"id": 1, "v": "a"}]},
@@ -445,7 +445,7 @@ class TestDuplicateIdentity:
     def test_duplicate_in_new_array(self) -> None:
         import pytest
         from json_delta.errors import DiffError
-        with pytest.raises(DiffError, match="Duplicate identity"):
+        with pytest.raises(DiffError, match="Duplicate identity.*at items"):
             compare(
                 {"items": [{"id": 1, "v": "a"}]},
                 {"items": [{"id": 1, "v": "a"}, {"id": 1, "v": "b"}]},

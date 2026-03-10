@@ -15,7 +15,7 @@ from json_delta._identity import (
     extract_identity,
     resolve_identity,
 )
-from json_delta._utils import json_equal
+from json_delta._utils import json_equal, make_hashable, should_exclude_path
 from json_delta.errors import DiffError
 from json_delta.models import (
     Delta,
@@ -136,7 +136,7 @@ def _diff_objects(
     all_keys = sorted((set(old.keys()) | set(new.keys())) - exclude)
 
     for key in all_keys:
-        if _should_exclude_path(prop_path, key, exclude_paths):
+        if should_exclude_path(prop_path, key, exclude_paths):
             continue
 
         seg = PropertySegment(name=key)
@@ -238,37 +238,38 @@ def _diff_arrays_keyed(
 ) -> None:
     """Compare arrays by a key property on each element."""
     key_property = identity.key_property
-    assert key_property is not None  # guaranteed by resolve_identity for mode="key"
+    if key_property is None:
+        raise DiffError("Internal error: key_property is None for mode='key' in _diff_arrays_keyed")
     resolver = identity.resolver
 
     path_str = build_path(segments)
 
-    old_by_key: dict[Any, Any] = {}
+    # Build lookup maps, caching (elem, key_val) to avoid re-calling the resolver.
+    old_by_key: dict[Any, tuple[Any, Any]] = {}
     for elem in old:
         key_val = extract_identity(elem, key_property, resolver)
-        hashable_key = _make_hashable(key_val)
+        hashable_key = make_hashable(key_val)
         if hashable_key in old_by_key:
             raise DiffError(
                 f"Duplicate identity '{key_property}=={key_val!r}' in old array at {path_str}"
             )
-        old_by_key[hashable_key] = elem
+        old_by_key[hashable_key] = (elem, key_val)
 
-    new_by_key: dict[Any, Any] = {}
+    new_by_key: dict[Any, tuple[Any, Any]] = {}
     new_key_order: list[Any] = []
     for elem in new:
         key_val = extract_identity(elem, key_property, resolver)
-        hashable_key = _make_hashable(key_val)
+        hashable_key = make_hashable(key_val)
         if hashable_key in new_by_key:
             raise DiffError(
                 f"Duplicate identity '{key_property}=={key_val!r}' in new array at {path_str}"
             )
-        new_by_key[hashable_key] = elem
+        new_by_key[hashable_key] = (elem, key_val)
         new_key_order.append(hashable_key)
 
     # Removed elements (in old but not in new)
-    for hashable_key, old_elem in old_by_key.items():
+    for hashable_key, (old_elem, key_val) in old_by_key.items():
         if hashable_key not in new_by_key:
-            key_val = extract_identity(old_elem, key_property, resolver)
             filter_seg = KeyFilterSegment(property=key_property, value=key_val)
             child_segments = [*segments, filter_seg]
             _emit_remove(old_elem, child_segments, reversible, operations)
@@ -276,12 +277,10 @@ def _diff_arrays_keyed(
     # Shared elements — recurse into properties for deep diffs
     for hashable_key in new_key_order:
         if hashable_key in old_by_key:
-            old_elem = old_by_key[hashable_key]
-            new_elem = new_by_key[hashable_key]
+            old_elem, key_val = old_by_key[hashable_key]
+            new_elem = new_by_key[hashable_key][0]
             if not json_equal(old_elem, new_elem):
-                key_val = extract_identity(old_elem, key_property, resolver)
                 filter_seg = KeyFilterSegment(property=key_property, value=key_val)
-                # Recurse into properties of the matched element
                 _diff_keyed_element(
                     old_elem, new_elem, [*segments, filter_seg], prop_path,
                     identity_keys, exclude, exclude_paths, reversible, operations,
@@ -290,8 +289,7 @@ def _diff_arrays_keyed(
     # Added elements (in new but not in old)
     for hashable_key in new_key_order:
         if hashable_key not in old_by_key:
-            new_elem = new_by_key[hashable_key]
-            key_val = extract_identity(new_elem, key_property, resolver)
+            new_elem, key_val = new_by_key[hashable_key]
             filter_seg = KeyFilterSegment(property=key_property, value=key_val)
             child_segments = [*segments, filter_seg]
             _emit_add(new_elem, child_segments, operations)
@@ -312,7 +310,7 @@ def _diff_keyed_element(
     all_keys = sorted((set(old_elem.keys()) | set(new_elem.keys())) - exclude)
 
     for key in all_keys:
-        if _should_exclude_path(prop_path, key, exclude_paths):
+        if should_exclude_path(prop_path, key, exclude_paths):
             continue
 
         seg = PropertySegment(name=key)
@@ -348,9 +346,11 @@ def _diff_arrays_value(
     produce ambiguous paths that ``apply_delta`` cannot resolve.
 
     Raises:
-        DiffError: If either array contains duplicate values.
+        DiffError: If either array contains duplicate or non-scalar values.
     """
     path_str = build_path(segments)
+    _check_value_scalars(old, "old", path_str)
+    _check_value_scalars(new, "new", path_str)
     _check_value_duplicates(old, "old", path_str)
     _check_value_duplicates(new, "new", path_str)
 
@@ -420,6 +420,26 @@ def _emit_remove(
 # ---------------------------------------------------------------------------
 
 
+def _check_value_scalars(arr: list[Any], label: str, path_str: str) -> None:
+    """Raise DiffError if a $value array contains non-scalar elements.
+
+    Value filter paths use literal comparisons (``[?(@=='x')]``), so elements
+    must be JSON scalars (str, int, float, bool, None).  Dicts and lists
+    cannot appear in value filter paths.
+    """
+    for val in arr:
+        if isinstance(val, (dict, list)):
+            raise DiffError(
+                f"Non-scalar value {type(val).__name__} in {label} array at {path_str}; "
+                f"$value identity requires scalar elements"
+            )
+        if isinstance(val, float) and not math.isfinite(val):
+            raise DiffError(
+                f"Non-finite float {val!r} in {label} array at {path_str}; "
+                f"$value identity requires finite scalars"
+            )
+
+
 def _check_value_duplicates(arr: list[Any], label: str, path_str: str) -> None:
     """Raise DiffError if a $value array contains duplicate values.
 
@@ -434,23 +454,6 @@ def _check_value_duplicates(arr: list[Any], label: str, path_str: str) -> None:
                     f"$value identity requires unique elements"
                 )
 
-
-def _should_exclude_path(prop_path: list[str], key: str, exclude_paths: frozenset[str]) -> bool:
-    """Check if a key at the current path should be excluded."""
-    if not exclude_paths:
-        return False
-    return ".".join([*prop_path, key]) in exclude_paths
-
-
-def _make_hashable(value: Any) -> Any:
-    """Make a JSON scalar safe for use as a dict key.
-
-    Python considers ``True == 1`` and ``False == 0``, so they collide
-    as dict keys.  We wrap bools in a tagged tuple to preserve identity.
-    """
-    if isinstance(value, bool):
-        return ("__bool__", value)
-    return value
 
 
 def _validate_json_value(value: Any, name: str) -> None:

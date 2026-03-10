@@ -775,3 +775,25 @@ class TestValueDuplicates:
         remove_ops = [op for op in delta.operations if op.op == "remove"]
         assert len(add_ops) == 1
         assert len(remove_ops) == 1
+
+    def test_non_scalar_in_old_raises(self) -> None:
+        """$value identity rejects non-scalar elements in old array."""
+        import pytest
+        from json_delta.errors import DiffError
+        with pytest.raises(DiffError, match="Non-scalar value.*\\$value identity requires scalar"):
+            diff_delta(
+                {"tags": [{"x": 1}]},
+                {"tags": ["a"]},
+                array_identity_keys={"tags": "$value"},
+            )
+
+    def test_non_scalar_in_new_raises(self) -> None:
+        """$value identity rejects non-scalar elements in new array."""
+        import pytest
+        from json_delta.errors import DiffError
+        with pytest.raises(DiffError, match="Non-scalar value.*\\$value identity requires scalar"):
+            diff_delta(
+                {"tags": ["a"]},
+                {"tags": [["nested"]]},
+                array_identity_keys={"tags": "$value"},
+            )

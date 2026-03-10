@@ -17,7 +17,7 @@ from json_delta._identity import (
     extract_identity,
     resolve_identity,
 )
-from json_delta._utils import json_equal
+from json_delta._utils import json_equal, make_hashable, should_exclude_path
 from json_delta.errors import DiffError
 from json_delta.models import ChangeType, ComparisonNode
 
@@ -130,7 +130,7 @@ def _compare_objects(
     all_keys = sorted((set(old.keys()) | set(new.keys())) - exclude)
 
     for key in all_keys:
-        if _should_exclude_path(prop_path, key, exclude_paths):
+        if should_exclude_path(prop_path, key, exclude_paths):
             continue
 
         if key in old and key not in new:
@@ -207,16 +207,17 @@ def _compare_arrays_keyed(
         msg = "key_property must be set for mode='key'"
         raise ValueError(msg)
     resolver = identity.resolver
+    path_ctx = ".".join(prop_path) if prop_path else "$"
 
     # Build lookup maps preserving order; detect duplicates
     old_by_key: dict[Any, Any] = {}
     old_order: list[Any] = []
     for elem in old:
         key_val = extract_identity(elem, key_property, resolver)
-        hashable_key = _make_hashable(key_val)
+        hashable_key = make_hashable(key_val)
         if hashable_key in old_by_key:
             raise DiffError(
-                f"Duplicate identity '{key_property}=={key_val!r}' in old array"
+                f"Duplicate identity '{key_property}=={key_val!r}' in old array at {path_ctx}"
             )
         old_by_key[hashable_key] = elem
         old_order.append(hashable_key)
@@ -225,10 +226,10 @@ def _compare_arrays_keyed(
     new_order: list[Any] = []
     for elem in new:
         key_val = extract_identity(elem, key_property, resolver)
-        hashable_key = _make_hashable(key_val)
+        hashable_key = make_hashable(key_val)
         if hashable_key in new_by_key:
             raise DiffError(
-                f"Duplicate identity '{key_property}=={key_val!r}' in new array"
+                f"Duplicate identity '{key_property}=={key_val!r}' in new array at {path_ctx}"
             )
         new_by_key[hashable_key] = elem
         new_order.append(hashable_key)
@@ -331,19 +332,3 @@ def _enrich_removed(value: Any) -> ComparisonNode:
     return ComparisonNode(type=ChangeType.REMOVED, old_value=value)
 
 
-def _should_exclude_path(prop_path: list[str], key: str, exclude_paths: frozenset[str]) -> bool:
-    """Check if a key at the current path should be excluded."""
-    if not exclude_paths:
-        return False
-    return ".".join([*prop_path, key]) in exclude_paths
-
-
-def _make_hashable(value: Any) -> Any:
-    """Make a JSON scalar safe for use as a dict key.
-
-    Python considers ``True == 1`` and ``False == 0``, so they collide
-    as dict keys.  We wrap bools in a tagged tuple to preserve identity.
-    """
-    if isinstance(value, bool):
-        return ("__bool__", value)
-    return value
