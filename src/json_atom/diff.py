@@ -1,4 +1,4 @@
-"""Compute a JSON Delta document from two objects.
+"""Compute a JSON Atom document from two objects.
 
 Non-normative — the spec defines what a delta looks like, not how to produce one.
 The key invariant: apply(source, diff(source, target)) == target.
@@ -9,15 +9,15 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from json_delta._identity import (
+from json_atom._identity import (
     ArrayIdentityKeys,
     _ResolvedIdentity,
     extract_identity,
     resolve_identity,
 )
-from json_delta._utils import json_equal, make_hashable, should_exclude_path, validate_json_value
-from json_delta.errors import DiffError
-from json_delta.models import (
+from json_atom._utils import json_equal, make_hashable, should_exclude_path, validate_json_value
+from json_atom.errors import DiffError
+from json_atom.models import (
     _DELTA_SPEC_KEYS,
     Delta,
     IndexSegment,
@@ -26,7 +26,7 @@ from json_delta.models import (
     PropertySegment,
     ValueFilterSegment,
 )
-from json_delta.path import build_path
+from json_atom.path import build_path
 
 type _Segment = PropertySegment | IndexSegment | KeyFilterSegment | ValueFilterSegment
 
@@ -40,7 +40,7 @@ def diff_delta(
     exclude_paths: set[str] | None = None,
     reversible: bool = True,
 ) -> Delta:
-    """Compute a JSON Delta between two objects.
+    """Compute a JSON Atom between two objects.
 
     Args:
         old_obj: The source document.
@@ -81,7 +81,7 @@ def diff_delta(
     _diff_values(old_obj, new_obj, [], [], _keys, _exclude, _exclude_paths, reversible, operations)
 
     return Delta({
-        "format": "json-delta",
+        "format": "json-atom",
         "version": 1,
         "operations": operations,
     })
@@ -509,7 +509,7 @@ def squash_deltas(
     """
     import copy
 
-    from json_delta.apply import apply_delta
+    from json_atom.apply import apply_delta
 
     # Determine the final state
     if target is not None and not deltas:

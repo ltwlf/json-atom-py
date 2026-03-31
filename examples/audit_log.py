@@ -10,7 +10,7 @@ import copy
 from datetime import UTC, datetime
 from typing import Any
 
-from json_delta import Delta, Operation, apply_delta, diff_delta, revert_delta
+from json_atom import Delta, Operation, apply_delta, diff_delta, revert_delta
 
 # Initial document
 initial = {"title": "Q4 Report", "status": "draft", "author": "Alice"}

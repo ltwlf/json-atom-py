@@ -1,8 +1,8 @@
-"""Tests for json_delta.compare — enriched comparison tree."""
+"""Tests for json_atom.compare — enriched comparison tree."""
 
-from json_delta._identity import IdentityResolver
-from json_delta.compare import compare
-from json_delta.models import ChangeType, ComparisonNode
+from json_atom._identity import IdentityResolver
+from json_atom.compare import compare
+from json_atom.models import ChangeType, ComparisonNode
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +495,7 @@ class TestDuplicateIdentity:
 
     def test_duplicate_in_old_array(self) -> None:
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate identity.*at items"):
             compare(
                 {"items": [{"id": 1, "v": "a"}, {"id": 1, "v": "b"}]},
@@ -505,7 +505,7 @@ class TestDuplicateIdentity:
 
     def test_duplicate_in_new_array(self) -> None:
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate identity.*at items"):
             compare(
                 {"items": [{"id": 1, "v": "a"}]},

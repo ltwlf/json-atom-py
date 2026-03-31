@@ -1,20 +1,20 @@
-"""Tests for json_delta.validate — delta document structural validation."""
+"""Tests for json_atom.validate — delta document structural validation."""
 
 import pytest
 
-from json_delta.validate import validate_delta
+from json_atom.validate import validate_delta
 
 
 class TestValidDelta:
     def test_minimal_valid_delta(self) -> None:
-        delta = {"format": "json-delta", "version": 1, "operations": []}
+        delta = {"format": "json-atom", "version": 1, "operations": []}
         result = validate_delta(delta)
         assert result.valid is True
         assert result.errors == ()
 
     def test_valid_delta_with_replace(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}
@@ -25,7 +25,7 @@ class TestValidDelta:
 
     def test_valid_delta_with_all_ops(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.role", "value": "admin"},
@@ -38,7 +38,7 @@ class TestValidDelta:
 
     def test_valid_delta_with_extensions(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "x_reason": "rename"}
@@ -51,7 +51,7 @@ class TestValidDelta:
     def test_remove_without_old_value_is_valid(self) -> None:
         """Per spec, oldValue is OPTIONAL on remove."""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$.legacy"}],
         }
@@ -61,7 +61,7 @@ class TestValidDelta:
     def test_replace_without_old_value_is_valid(self) -> None:
         """Per spec, oldValue is OPTIONAL on replace."""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob"}],
         }
@@ -97,34 +97,34 @@ class TestInvalidDelta:
         delta = {"format": "json-patch", "version": 1, "operations": []}
         result = validate_delta(delta)
         assert result.valid is False
-        assert any("json-delta" in e for e in result.errors)
+        assert any("json-atom" in e for e in result.errors)
 
     def test_missing_version(self) -> None:
-        delta = {"format": "json-delta", "operations": []}
+        delta = {"format": "json-atom", "operations": []}
         result = validate_delta(delta)
         assert result.valid is False
         assert any("version" in e for e in result.errors)
 
     def test_version_is_bool(self) -> None:
         """bool is not a valid version even though bool subclasses int in Python."""
-        delta = {"format": "json-delta", "version": True, "operations": []}
+        delta = {"format": "json-atom", "version": True, "operations": []}
         result = validate_delta(delta)
         assert result.valid is False
         assert any("version" in e for e in result.errors)
 
     def test_version_is_string(self) -> None:
-        delta = {"format": "json-delta", "version": "1", "operations": []}
+        delta = {"format": "json-atom", "version": "1", "operations": []}
         result = validate_delta(delta)
         assert result.valid is False
 
     def test_missing_operations(self) -> None:
-        delta = {"format": "json-delta", "version": 1}
+        delta = {"format": "json-atom", "version": 1}
         result = validate_delta(delta)
         assert result.valid is False
         assert any("operations" in e for e in result.errors)
 
     def test_operations_not_array(self) -> None:
-        delta = {"format": "json-delta", "version": 1, "operations": "not-array"}
+        delta = {"format": "json-atom", "version": 1, "operations": "not-array"}
         result = validate_delta(delta)
         assert result.valid is False
 
@@ -137,7 +137,7 @@ class TestInvalidDelta:
 
 class TestInvalidOperations:
     def _make_delta(self, *ops: dict[str, object]) -> dict[str, object]:
-        return {"format": "json-delta", "version": 1, "operations": list(ops)}
+        return {"format": "json-atom", "version": 1, "operations": list(ops)}
 
     def test_operation_not_dict(self) -> None:
         result = validate_delta(self._make_delta("not-a-dict"))  # type: ignore[arg-type]

@@ -1,6 +1,6 @@
 """Index-based vs key-based — why stable array identity matters.
 
-Demonstrates the core problem JSON Delta solves: index-based diffs break
+Demonstrates the core problem JSON Atom solves: index-based diffs break
 when arrays are reordered, while key-based diffs remain correct.
 
 Run: uv run python examples/index_vs_keyed.py
@@ -9,7 +9,7 @@ Run: uv run python examples/index_vs_keyed.py
 import copy
 import json
 
-from json_delta import apply_delta, diff_delta
+from json_atom import apply_delta, diff_delta
 
 # --- Setup: a simple task list ---
 

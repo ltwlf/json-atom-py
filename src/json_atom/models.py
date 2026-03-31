@@ -1,4 +1,4 @@
-"""Data models for json-delta path segments, validation results, and delta types."""
+"""Data models for json-atom path segments, validation results, and delta types."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 _IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 if TYPE_CHECKING:
-    from json_delta._identity import ArrayIdentityKeys
+    from json_atom._identity import ArrayIdentityKeys
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,7 +209,7 @@ type OpType = Literal["add", "remove", "replace"]
 
 
 class Operation(dict[str, Any]):
-    """A single JSON Delta operation with typed property access and convenience methods.
+    """A single JSON Atom operation with typed property access and convenience methods.
 
     Subclasses ``dict`` — all dict operations (``json.dumps``, ``[]`` access,
     ``.items()``) work as expected. Extension properties are accessible as
@@ -234,7 +234,7 @@ class Operation(dict[str, Any]):
         """Create an ``add`` operation.
 
         Args:
-            path: JSON Delta path (e.g., ``"$.name"``).
+            path: JSON Atom path (e.g., ``"$.name"``).
             value: The value to add.
             **extensions: Extension properties (``x_*`` keys).
         """
@@ -245,7 +245,7 @@ class Operation(dict[str, Any]):
         """Create a ``replace`` operation.
 
         Args:
-            path: JSON Delta path (e.g., ``"$.name"``).
+            path: JSON Atom path (e.g., ``"$.name"``).
             value: The new value.
             old_value: The previous value (for reversible deltas).
             **extensions: Extension properties (``x_*`` keys).
@@ -260,7 +260,7 @@ class Operation(dict[str, Any]):
         """Create a ``remove`` operation.
 
         Args:
-            path: JSON Delta path (e.g., ``"$.name"``).
+            path: JSON Atom path (e.g., ``"$.name"``).
             old_value: The removed value (for reversible deltas).
             **extensions: Extension properties (``x_*`` keys).
         """
@@ -276,7 +276,7 @@ class Operation(dict[str, Any]):
 
     @property
     def path(self) -> str:
-        """The JSON Delta path targeting this operation."""
+        """The JSON Atom path targeting this operation."""
         return self["path"]  # type: ignore[no-any-return]
 
     @property
@@ -301,10 +301,10 @@ class Operation(dict[str, Any]):
     ) -> list[RootSegment | PropertySegment | IndexSegment | KeyFilterSegment | ValueFilterSegment]:
         """The parsed path segments for this operation's path (cached).
 
-        Delegates to :func:`json_delta.path.parse_path`.  The result is
+        Delegates to :func:`json_atom.path.parse_path`.  The result is
         computed once and cached for the lifetime of the Operation instance.
         """
-        from json_delta.path import parse_path
+        from json_atom.path import parse_path
 
         return parse_path(self.path)
 
@@ -335,21 +335,21 @@ class Operation(dict[str, Any]):
     def describe(self) -> str:
         """Human-readable description of this operation's path.
 
-        Delegates to :func:`json_delta.path.describe_path`.
+        Delegates to :func:`json_atom.path.describe_path`.
         """
-        from json_delta.path import describe_path
+        from json_atom.path import describe_path
 
         return describe_path(self.path)
 
     def resolve(self, document: Any) -> str:
         """Resolve this operation's path to an RFC 6901 JSON Pointer.
 
-        Delegates to :func:`json_delta.path.resolve_path`.
+        Delegates to :func:`json_atom.path.resolve_path`.
 
         Raises:
             PathError: If a filter matches zero or multiple elements.
         """
-        from json_delta.path import resolve_path
+        from json_atom.path import resolve_path
 
         return resolve_path(self.path, document)
 
@@ -362,13 +362,13 @@ class Operation(dict[str, Any]):
         Returns:
             A dict with ``op``, ``path``, and optionally ``value``.
         """
-        from json_delta.json_patch import _operation_to_json_patch
+        from json_atom.json_patch import _operation_to_json_patch
 
         return _operation_to_json_patch(self, document)
 
     @property
     def extensions(self) -> dict[str, Any]:
-        """All non-spec properties on this operation (per JSON Delta v0 Section 11).
+        """All non-spec properties on this operation (per JSON Atom v0 Section 11).
 
         The ``x_`` prefix is recommended for future-safety but not enforced.
         """
@@ -484,7 +484,7 @@ class Operation(dict[str, Any]):
 
 
 class Delta(dict[str, Any]):
-    """A JSON Delta document with typed property access and convenience methods.
+    """A JSON Atom document with typed property access and convenience methods.
 
     Subclasses ``dict`` — ``json.dumps(delta)``, ``delta["operations"]``, and
     all standard dict operations work as expected. Extension properties are
@@ -527,7 +527,7 @@ class Delta(dict[str, Any]):
             **extensions: Extension properties (``x_*`` keys) on the envelope.
 
         Returns:
-            A new :class:`Delta` with ``format="json-delta"`` and ``version=1``.
+            A new :class:`Delta` with ``format="json-atom"`` and ``version=1``.
 
         Example::
 
@@ -536,7 +536,7 @@ class Delta(dict[str, Any]):
                 Operation.replace("$.age", 31, old_value=30),
             )
         """
-        d: dict[str, Any] = {"format": "json-delta", "version": 1, "operations": list(operations)}
+        d: dict[str, Any] = {"format": "json-atom", "version": 1, "operations": list(operations)}
         d.update(extensions)
         return cls(d)
 
@@ -547,7 +547,7 @@ class Delta(dict[str, Any]):
         This is a lightweight gate — it verifies that ``format``, ``version``,
         and ``operations`` are present but does **not** validate types or
         operation shapes.  For full structural validation, call
-        :func:`json_delta.validate.validate_delta` on the result.
+        :func:`json_atom.validate.validate_delta` on the result.
 
         Raises:
             ValueError: If the dict is missing required envelope keys
@@ -566,7 +566,7 @@ class Delta(dict[str, Any]):
 
     @property
     def format(self) -> str:
-        """The format discriminator (always ``"json-delta"``)."""
+        """The format discriminator (always ``"json-atom"``)."""
         return self["format"]  # type: ignore[no-any-return]
 
     @property
@@ -626,7 +626,7 @@ class Delta(dict[str, Any]):
         for key, value in other.items():
             if key != "operations":
                 merged[key] = value
-        merged["format"] = self.get("format", other.get("format", "json-delta"))
+        merged["format"] = self.get("format", other.get("format", "json-atom"))
         merged["version"] = self.get("version", other.get("version", 1))
         merged["operations"] = [*self.operations, *other.operations]
         return Delta(merged)
@@ -736,9 +736,9 @@ class Delta(dict[str, Any]):
     def apply(self, obj: Any) -> Any:
         """Apply this delta to a document.
 
-        Delegates to :func:`json_delta.apply.apply_delta`.
+        Delegates to :func:`json_atom.apply.apply_delta`.
         """
-        from json_delta.apply import apply_delta
+        from json_atom.apply import apply_delta
 
         return apply_delta(obj, self)
 
@@ -747,18 +747,18 @@ class Delta(dict[str, Any]):
 
         The inverse, when applied to the target document, recovers the source.
 
-        Delegates to :func:`json_delta.invert.invert_delta`.
+        Delegates to :func:`json_atom.invert.invert_delta`.
         """
-        from json_delta.invert import invert_delta
+        from json_atom.invert import invert_delta
 
         return invert_delta(self)
 
     def revert(self, obj: Any) -> Any:
         """Revert this delta by applying its inverse.
 
-        Delegates to :func:`json_delta.invert.revert_delta`.
+        Delegates to :func:`json_atom.invert.revert_delta`.
         """
-        from json_delta.invert import revert_delta
+        from json_atom.invert import revert_delta
 
         return revert_delta(obj, self)
 
@@ -767,9 +767,9 @@ class Delta(dict[str, Any]):
 
         Requires the source document to resolve filter paths to positional indices.
 
-        Delegates to :func:`json_delta.json_patch.to_json_patch`.
+        Delegates to :func:`json_atom.json_patch.to_json_patch`.
         """
-        from json_delta.json_patch import to_json_patch
+        from json_atom.json_patch import to_json_patch
 
         return to_json_patch(self, document)
 
@@ -777,19 +777,19 @@ class Delta(dict[str, Any]):
     def from_json_patch(cls, patch: list[dict[str, Any]]) -> Delta:
         """Create a Delta from an RFC 6902 JSON Patch.
 
-        Converts JSON Pointer paths to JSON Delta paths (index-based).
+        Converts JSON Pointer paths to JSON Atom paths (index-based).
         Supports ``add``, ``remove``, ``replace`` operations.
 
         Raises:
             ValueError: For unsupported operations (``move``, ``copy``, ``test``).
         """
-        from json_delta.json_patch import from_json_patch
+        from json_atom.json_patch import from_json_patch
 
         return from_json_patch(patch)
 
     @property
     def extensions(self) -> dict[str, Any]:
-        """All non-spec properties on this delta envelope (per JSON Delta v0 Section 11).
+        """All non-spec properties on this delta envelope (per JSON Atom v0 Section 11).
 
         The ``x_`` prefix is recommended for future-safety but not enforced.
         """
@@ -822,9 +822,9 @@ class Delta(dict[str, Any]):
         This is state compaction, not history-preserving merge — intermediate
         operation metadata (extensions, granularity, ordering) is lost.
 
-        Delegates to :func:`json_delta.diff.squash_deltas`.
+        Delegates to :func:`json_atom.diff.squash_deltas`.
         """
-        from json_delta.diff import squash_deltas
+        from json_atom.diff import squash_deltas
 
         return squash_deltas(
             source,

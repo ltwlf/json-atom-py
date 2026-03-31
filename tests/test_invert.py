@@ -1,10 +1,10 @@
-"""Tests for json_delta.invert — delta inversion and reversion."""
+"""Tests for json_atom.invert — delta inversion and reversion."""
 
 import pytest
 
-from json_delta.apply import apply_delta
-from json_delta.errors import InvertError
-from json_delta.invert import invert_delta, revert_delta
+from json_atom.apply import apply_delta
+from json_atom.errors import InvertError
+from json_atom.invert import invert_delta, revert_delta
 
 from tests.conftest import deep_clone
 
@@ -12,7 +12,7 @@ from tests.conftest import deep_clone
 class TestInvertDeltaOperations:
     def test_add_becomes_remove(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.role", "value": "admin"}
@@ -28,7 +28,7 @@ class TestInvertDeltaOperations:
 
     def test_remove_becomes_add(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.legacy", "oldValue": True}
@@ -43,7 +43,7 @@ class TestInvertDeltaOperations:
 
     def test_replace_swaps_values(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}
@@ -58,7 +58,7 @@ class TestInvertDeltaOperations:
 
     def test_operation_order_reversed(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"},
@@ -75,7 +75,7 @@ class TestInvertDeltaOperations:
         assert inverse["operations"][1]["path"] == "$.name"
 
     def test_empty_operations(self) -> None:
-        delta = {"format": "json-delta", "version": 1, "operations": []}
+        delta = {"format": "json-atom", "version": 1, "operations": []}
         inverse = invert_delta(delta)
         assert inverse["operations"] == []
 
@@ -83,7 +83,7 @@ class TestInvertDeltaOperations:
 class TestInvertDeltaErrors:
     def test_missing_old_value_on_replace_raises(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob"}
@@ -94,7 +94,7 @@ class TestInvertDeltaErrors:
 
     def test_missing_old_value_on_remove_raises(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.legacy"}
@@ -113,7 +113,7 @@ class TestInvertDeltaErrors:
 
     def test_error_identifies_operation_index(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.a", "value": 1},
@@ -129,7 +129,7 @@ class TestRevertDelta:
         """apply(source, delta) == target AND revert(target, delta) == source."""
         source = {"name": "Alice", "role": "user"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"},
@@ -145,7 +145,7 @@ class TestRevertDelta:
     def test_round_trip_with_add_and_remove(self) -> None:
         source = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.role", "value": "admin"},
@@ -160,7 +160,7 @@ class TestRevertDelta:
     def test_double_inversion_is_identity(self) -> None:
         """invert(invert(delta)) == delta for all operation types."""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.role", "value": "admin"},
@@ -175,7 +175,7 @@ class TestRevertDelta:
 
     def test_non_reversible_delta_raises(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob"}

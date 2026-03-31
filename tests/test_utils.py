@@ -1,8 +1,8 @@
-"""Tests for json_delta._utils — json_equal and json_type_of."""
+"""Tests for json_atom._utils — json_equal and json_type_of."""
 
 import pytest
 
-from json_delta._utils import json_equal, json_type_of
+from json_atom._utils import json_equal, json_type_of
 
 
 class TestJsonEqual:

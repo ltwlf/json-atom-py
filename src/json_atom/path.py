@@ -1,6 +1,6 @@
-"""JSON Delta Path parsing, building, and filter literal handling.
+"""JSON Atom Path parsing, building, and filter literal handling.
 
-Implements the path grammar from the JSON Delta v0 specification (Section 5).
+Implements the path grammar from the JSON Atom v0 specification (Section 5).
 See also: ABNF grammar (Appendix C), reference parser (Appendix D).
 """
 
@@ -11,8 +11,8 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
-from json_delta.errors import PathError
-from json_delta.models import (
+from json_atom.errors import PathError
+from json_atom.models import (
     IndexSegment,
     KeyFilterSegment,
     PropertySegment,
@@ -35,7 +35,7 @@ _NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
 
 
 def format_filter_literal(value: Any) -> str:
-    """Format a Python value as a canonical JSON Delta filter literal string.
+    """Format a Python value as a canonical JSON Atom filter literal string.
 
     Handles: str, int, float, bool, None.
     Raises PathError for non-JSON or non-finite values.
@@ -186,7 +186,7 @@ def _parse_filter(inner: str) -> KeyFilterSegment | ValueFilterSegment:
 def parse_path(
     path: str,
 ) -> list[RootSegment | PropertySegment | IndexSegment | KeyFilterSegment | ValueFilterSegment]:
-    """Parse a JSON Delta Path string into a list of typed segments.
+    """Parse a JSON Atom Path string into a list of typed segments.
 
     Follows the grammar from spec Section 5.1 (Appendix C ABNF).
     Accepts both canonical and non-canonical forms (spec Section 5.5).
@@ -281,7 +281,7 @@ def parse_path(
 
 
 def describe_path(path: str) -> str:
-    """Generate a human-readable description of a JSON Delta path.
+    """Generate a human-readable description of a JSON Atom path.
 
     Parses the path into typed segments and formats each readably.
 
@@ -330,13 +330,13 @@ def describe_path(path: str) -> str:
 
 
 def resolve_path(path: str, document: Any) -> str:
-    """Resolve a JSON Delta path to an RFC 6901 JSON Pointer.
+    """Resolve a JSON Atom path to an RFC 6901 JSON Pointer.
 
     Walks the path segments against the document, resolving filter expressions
     to positional indices. Property and index segments pass through directly.
 
     Args:
-        path: A JSON Delta path string (e.g., ``"$.items[?(@.id=='1')].name"``).
+        path: A JSON Atom path string (e.g., ``"$.items[?(@.id=='1')].name"``).
         document: The document to resolve against.
 
     Returns:
@@ -389,7 +389,7 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
     if not isinstance(arr, list):
         raise PathError(f"Cannot apply key filter on {type(arr).__name__}: expected array")
 
-    from json_delta._utils import json_equal
+    from json_atom._utils import json_equal
 
     matches: list[int] = []
     for idx, elem in enumerate(arr):
@@ -412,7 +412,7 @@ def _resolve_value_filter(arr: Any, seg: ValueFilterSegment) -> int:
     if not isinstance(arr, list):
         raise PathError(f"Cannot apply value filter on {type(arr).__name__}: expected array")
 
-    from json_delta._utils import json_equal
+    from json_atom._utils import json_equal
 
     matches: list[int] = []
     for idx, elem in enumerate(arr):
@@ -431,7 +431,7 @@ def _resolve_value_filter(arr: Any, seg: ValueFilterSegment) -> int:
 def build_path(
     segments: Sequence[RootSegment | PropertySegment | IndexSegment | KeyFilterSegment | ValueFilterSegment],
 ) -> str:
-    """Build a canonical JSON Delta Path string from typed segments.
+    """Build a canonical JSON Atom Path string from typed segments.
 
     Produces canonical form per spec Section 5.5:
     - Dot notation for property names matching [a-zA-Z_][a-zA-Z0-9_]*

@@ -1,6 +1,6 @@
-"""Apply a JSON Delta document to a source object.
+"""Apply a JSON Atom document to a source object.
 
-Implements Section 8 (Applying a Delta) of the JSON Delta v0 specification.
+Implements Section 8 (Applying a Delta) of the JSON Atom v0 specification.
 """
 
 from __future__ import annotations
@@ -8,9 +8,9 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from json_delta._utils import json_equal
-from json_delta.errors import ApplyError
-from json_delta.models import (
+from json_atom._utils import json_equal
+from json_atom.errors import ApplyError
+from json_atom.models import (
     Delta,
     IndexSegment,
     KeyFilterSegment,
@@ -18,12 +18,12 @@ from json_delta.models import (
     PropertySegment,
     ValueFilterSegment,
 )
-from json_delta.path import parse_path
-from json_delta.validate import validate_delta
+from json_atom.path import parse_path
+from json_atom.validate import validate_delta
 
 
 def apply_delta(obj: Any, delta: Delta) -> Any:
-    """Apply a JSON Delta to a source object.
+    """Apply a JSON Atom to a source object.
 
     Mutates the object in place where possible. Always use the return value,
     as root operations may replace the entire object.

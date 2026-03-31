@@ -12,8 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from json_delta._utils import json_equal
-from json_delta.errors import DiffError
+from json_atom._utils import json_equal
+from json_atom.errors import DiffError
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +26,7 @@ class IdentityResolver:
     .. important::
 
         The value returned by ``resolve`` **must** match the value actually
-        stored under ``elem[property]`` for that element.  JSON Delta applies
+        stored under ``elem[property]`` for that element.  JSON Atom applies
         keyed-array filters by testing ``elem[property] == literal``, so if
         the resolver returns a synthetic or composite value that is not
         literally stored on the element, the generated delta paths will not

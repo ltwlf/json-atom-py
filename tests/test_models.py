@@ -1,11 +1,11 @@
-"""Tests for json_delta.models — PathSegment types, ValidationResult, Delta, Operation."""
+"""Tests for json_atom.models — PathSegment types, ValidationResult, Delta, Operation."""
 
 import copy
 import json
 
 import pytest
 
-from json_delta.models import (
+from json_atom.models import (
     Delta,
     IndexSegment,
     KeyFilterSegment,
@@ -399,19 +399,19 @@ class TestOperation:
 class TestDelta:
     def test_construction(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.name", "value": "Alice"},
             ],
         })
-        assert delta.format == "json-delta"
+        assert delta.format == "json-atom"
         assert delta.version == 1
         assert len(delta.operations) == 1
 
     def test_operations_are_operation_instances(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$", "value": 1}],
         })
@@ -419,41 +419,41 @@ class TestDelta:
 
     def test_operations_already_wrapped(self) -> None:
         op = Operation(op="add", path="$", value=1)
-        delta = Delta({"format": "json-delta", "version": 1, "operations": [op]})
+        delta = Delta({"format": "json-atom", "version": 1, "operations": [op]})
         assert delta.operations[0] is op
 
     def test_dict_access(self) -> None:
-        delta = Delta({"format": "json-delta", "version": 1, "operations": []})
-        assert delta["format"] == "json-delta"
+        delta = Delta({"format": "json-atom", "version": 1, "operations": []})
+        assert delta["format"] == "json-atom"
         assert delta["version"] == 1
         assert delta["operations"] == []
 
     def test_isinstance_dict(self) -> None:
-        delta = Delta({"format": "json-delta", "version": 1, "operations": []})
+        delta = Delta({"format": "json-atom", "version": 1, "operations": []})
         assert isinstance(delta, dict)
 
     def test_json_serializable(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 42}],
         })
         result = json.loads(json.dumps(delta))
-        assert result["format"] == "json-delta"
+        assert result["format"] == "json-atom"
         assert result["operations"][0]["op"] == "add"
 
     def test_extension_properties(self) -> None:
-        delta = Delta({"format": "json-delta", "version": 1, "operations": []})
+        delta = Delta({"format": "json-atom", "version": 1, "operations": []})
         delta["x_agent"] = "test-agent"
         assert delta["x_agent"] == "test-agent"
 
     def test_is_empty_true(self) -> None:
-        delta = Delta({"format": "json-delta", "version": 1, "operations": []})
+        delta = Delta({"format": "json-atom", "version": 1, "operations": []})
         assert delta.is_empty is True
 
     def test_is_empty_false(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 1}],
         })
@@ -461,7 +461,7 @@ class TestDelta:
 
     def test_is_reversible_true(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.x", "value": 2, "oldValue": 1},
@@ -473,7 +473,7 @@ class TestDelta:
 
     def test_is_reversible_false(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.x", "value": 2},  # no oldValue
@@ -482,12 +482,12 @@ class TestDelta:
         assert delta.is_reversible is False
 
     def test_is_reversible_empty(self) -> None:
-        delta = Delta({"format": "json-delta", "version": 1, "operations": []})
+        delta = Delta({"format": "json-atom", "version": 1, "operations": []})
         assert delta.is_reversible is True
 
     def test_repr(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$", "value": 1}],
         })
@@ -495,7 +495,7 @@ class TestDelta:
 
     def test_apply_method(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.name", "value": "Alice"}],
         })
@@ -504,7 +504,7 @@ class TestDelta:
 
     def test_invert_method(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.x", "value": 2, "oldValue": 1}],
         })
@@ -517,7 +517,7 @@ class TestDelta:
     def test_revert_method(self) -> None:
         source = {"x": 1}
         target = {"x": 2}
-        from json_delta import diff_delta
+        from json_atom import diff_delta
 
         delta = diff_delta(source, target)
         result = delta.revert(copy.deepcopy(target))
@@ -525,7 +525,7 @@ class TestDelta:
 
     def test_to_json_patch_method(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob"}],
         })
@@ -537,26 +537,26 @@ class TestDelta:
         patch = [{"op": "add", "path": "/name", "value": "Alice"}]
         delta = Delta.from_json_patch(patch)
         assert isinstance(delta, Delta)
-        assert delta.format == "json-delta"
+        assert delta.format == "json-atom"
         assert delta.operations[0].op == "add"
 
     # -- Delta.from_dict() --------------------------------------------------
 
     def test_from_dict_valid(self) -> None:
         raw = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 1}],
         }
         delta = Delta.from_dict(raw)
         assert isinstance(delta, Delta)
-        assert delta.format == "json-delta"
+        assert delta.format == "json-atom"
         assert len(delta.operations) == 1
         assert isinstance(delta.operations[0], Operation)
 
     def test_from_dict_with_extensions(self) -> None:
         raw = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [],
             "x_agent": "test",
@@ -566,7 +566,7 @@ class TestDelta:
 
     def test_from_dict_missing_operations(self) -> None:
         with pytest.raises(ValueError, match="missing keys.*operations"):
-            Delta.from_dict({"format": "json-delta", "version": 1})
+            Delta.from_dict({"format": "json-atom", "version": 1})
 
     def test_from_dict_missing_format(self) -> None:
         with pytest.raises(ValueError, match="missing keys.*format"):
@@ -619,7 +619,7 @@ class TestDelta:
             Operation.add("$.name", "Alice"),
             Operation.replace("$.age", 31, old_value=30),
         )
-        assert delta.format == "json-delta"
+        assert delta.format == "json-atom"
         assert delta.version == 1
         assert len(delta.operations) == 2
         assert delta.operations[0].op == "add"
@@ -627,7 +627,7 @@ class TestDelta:
 
     def test_create_empty(self) -> None:
         delta = Delta.create()
-        assert delta.format == "json-delta"
+        assert delta.format == "json-atom"
         assert delta.is_empty
 
     def test_create_with_extensions(self) -> None:
@@ -736,7 +736,7 @@ class TestDelta:
         )
         filtered = delta.filter(lambda op: op.path == "$.x")
         assert filtered["x_agent"] == "test"
-        assert filtered.format == "json-delta"
+        assert filtered.format == "json-atom"
 
     def test_filter_empty_result(self) -> None:
         delta = Delta.create(Operation.add("$.x", 1))
@@ -796,7 +796,7 @@ class TestDelta:
         assert "/items/0/name" in s
 
     def test_diff_returns_delta(self) -> None:
-        from json_delta import diff_delta
+        from json_atom import diff_delta
 
         delta = diff_delta({"x": 1}, {"x": 2})
         assert isinstance(delta, Delta)
@@ -805,7 +805,7 @@ class TestDelta:
         assert delta.operations[0].path == "$.x"
 
     def test_invert_returns_delta(self) -> None:
-        from json_delta import diff_delta, invert_delta
+        from json_atom import diff_delta, invert_delta
 
         delta = diff_delta({"x": 1}, {"x": 2})
         inv = invert_delta(delta)
@@ -929,7 +929,7 @@ class TestDeltaMap:
         delta = Delta.create(Operation.add("$.x", 1), x_agent="test")
         mapped = delta.map(lambda op: op)
         assert mapped["x_agent"] == "test"
-        assert mapped.format == "json-delta"
+        assert mapped.format == "json-atom"
 
     def test_returns_new_delta(self) -> None:
         delta = Delta.create(Operation.add("$.x", 1))
@@ -971,7 +971,7 @@ class TestDeltaStamp:
             pass
 
         op = AuditOp(op="add", path="$.x", value=1)
-        delta = Delta({"format": "json-delta", "version": 1, "operations": [op]})
+        delta = Delta({"format": "json-atom", "version": 1, "operations": [op]})
         stamped = delta.stamp(x_ts="now")
         assert type(stamped.operations[0]) is AuditOp
 
@@ -1008,7 +1008,7 @@ class TestDeltaGroupBy:
         groups = delta.group_by(lambda op: op.path)
         for sub_delta in groups.values():
             assert sub_delta["x_agent"] == "test"
-            assert sub_delta.format == "json-delta"
+            assert sub_delta.format == "json-atom"
 
     def test_single_group(self) -> None:
         delta = Delta.create(

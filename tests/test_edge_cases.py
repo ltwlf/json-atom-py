@@ -2,11 +2,11 @@
 
 import pytest
 
-from json_delta.apply import apply_delta
-from json_delta.diff import diff_delta
-from json_delta.errors import ApplyError, PathError
-from json_delta.invert import invert_delta
-from json_delta.path import parse_path
+from json_atom.apply import apply_delta
+from json_atom.diff import diff_delta
+from json_atom.errors import ApplyError, PathError
+from json_atom.invert import invert_delta
+from json_atom.path import parse_path
 
 from tests.conftest import deep_clone
 
@@ -20,7 +20,7 @@ class TestFilterEdgeCases:
     def test_key_filter_match_zero_on_replace(self) -> None:
         with pytest.raises(ApplyError, match="zero"):
             apply_delta({"items": [{"id": 1}]}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$.items[?(@.id==99)].name", "value": "x"}],
             })
@@ -28,7 +28,7 @@ class TestFilterEdgeCases:
     def test_key_filter_match_zero_on_remove(self) -> None:
         with pytest.raises(ApplyError, match="zero"):
             apply_delta({"items": [{"id": 1}]}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "remove", "path": "$.items[?(@.id==99)]"}],
             })
@@ -36,7 +36,7 @@ class TestFilterEdgeCases:
     def test_key_filter_multiple_matches(self) -> None:
         with pytest.raises(ApplyError, match="2 elements"):
             apply_delta({"items": [{"id": 1}, {"id": 1}]}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$.items[?(@.id==1)].name", "value": "x"}],
             })
@@ -44,7 +44,7 @@ class TestFilterEdgeCases:
     def test_value_filter_multiple_matches(self) -> None:
         with pytest.raises(ApplyError):
             apply_delta({"tags": ["a", "a"]}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "remove", "path": "$.tags[?(@=='a')]"}],
             })
@@ -59,7 +59,7 @@ class TestPropertyExistence:
     def test_add_existing_property_raises(self) -> None:
         with pytest.raises(ApplyError, match="already exists"):
             apply_delta({"name": "Alice"}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "add", "path": "$.name", "value": "Bob"}],
             })
@@ -67,7 +67,7 @@ class TestPropertyExistence:
     def test_remove_nonexistent_property_raises(self) -> None:
         with pytest.raises(ApplyError, match="does not exist"):
             apply_delta({"name": "Alice"}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "remove", "path": "$.missing"}],
             })
@@ -75,7 +75,7 @@ class TestPropertyExistence:
     def test_replace_nonexistent_property_raises(self) -> None:
         with pytest.raises(ApplyError, match="does not exist"):
             apply_delta({"name": "Alice"}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$.missing", "value": "x"}],
             })
@@ -112,13 +112,13 @@ class TestNullVsAbsent:
 
 class TestNoOpDelta:
     def test_empty_operations_is_valid(self) -> None:
-        delta = {"format": "json-delta", "version": 1, "operations": []}
+        delta = {"format": "json-atom", "version": 1, "operations": []}
         obj = {"name": "Alice"}
         result = apply_delta(deep_clone(obj), delta)
         assert result == obj
 
     def test_empty_operations_inversion(self) -> None:
-        delta = {"format": "json-delta", "version": 1, "operations": []}
+        delta = {"format": "json-atom", "version": 1, "operations": []}
         inverse = invert_delta(delta)
         assert inverse["operations"] == []
 
@@ -208,7 +208,7 @@ class TestMalformedPaths:
     def test_malformed_path_in_delta_raises_apply_error(self) -> None:
         with pytest.raises(ApplyError):
             apply_delta({"x": 1}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "invalid", "value": 2}],
             })
@@ -224,7 +224,7 @@ class TestKeyedArrayConsistencyEdgeCases:
         """Filter value true should not match int 1 in identity check."""
         with pytest.raises(ApplyError, match="mismatch"):
             apply_delta({"items": []}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "add", "path": "$.items[?(@.active==true)]", "value": {"active": 1}}

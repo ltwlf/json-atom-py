@@ -1,11 +1,11 @@
-"""Conformance tests against the official JSON Delta fixture suite.
+"""Conformance tests against the official JSON Atom fixture suite.
 
 Level 1: apply(source, delta) == target
 Level 2: apply(target, inverse(delta)) == source
 """
 
-from json_delta.apply import apply_delta
-from json_delta.invert import invert_delta
+from json_atom.apply import apply_delta
+from json_atom.invert import invert_delta
 
 from tests.conftest import deep_clone, load_fixture
 

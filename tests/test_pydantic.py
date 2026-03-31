@@ -11,7 +11,7 @@ pydantic = pytest.importorskip("pydantic", minversion="2.0")
 
 from pydantic import BaseModel  # noqa: E402
 
-from json_delta.models import Delta, Operation  # noqa: E402
+from json_atom.models import Delta, Operation  # noqa: E402
 
 
 class OperationModel(BaseModel):
@@ -91,7 +91,7 @@ class TestDeltaInPydantic:
 
     def test_from_raw_dict(self) -> None:
         raw: dict[str, Any] = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.name", "value": "Alice"}],
         }
@@ -121,7 +121,7 @@ class TestDeltaInPydantic:
         m = DeltaModel(delta=delta)
         json_str = m.model_dump_json()
         parsed = json.loads(json_str)
-        assert parsed["delta"]["format"] == "json-delta"
+        assert parsed["delta"]["format"] == "json-atom"
         assert len(parsed["delta"]["operations"]) == 2
 
     def test_validation_rejects_non_dict(self) -> None:
@@ -130,7 +130,7 @@ class TestDeltaInPydantic:
 
     def test_delta_with_extensions(self) -> None:
         raw: dict[str, Any] = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [],
             "x_agent": "test",

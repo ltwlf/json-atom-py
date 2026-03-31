@@ -1,16 +1,16 @@
-"""Tests for json_delta.path — path parsing, building, and filter literals."""
+"""Tests for json_atom.path — path parsing, building, and filter literals."""
 
 import pytest
 
-from json_delta.errors import PathError
-from json_delta.models import (
+from json_atom.errors import PathError
+from json_atom.models import (
     IndexSegment,
     KeyFilterSegment,
     PropertySegment,
     RootSegment,
     ValueFilterSegment,
 )
-from json_delta.path import (
+from json_atom.path import (
     build_path,
     describe_path,
     format_filter_literal,

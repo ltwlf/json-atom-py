@@ -1,9 +1,9 @@
-"""Internal utility functions for json-delta."""
+"""Internal utility functions for json-atom."""
 
 import math
 from typing import Any
 
-from json_delta.errors import DiffError
+from json_atom.errors import DiffError
 
 
 def json_equal(a: Any, b: Any) -> bool:

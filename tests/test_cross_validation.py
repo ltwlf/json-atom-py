@@ -1,4 +1,4 @@
-"""Cross-validation tests: verify json-delta-py produces the same results as json-diff-ts.
+"""Cross-validation tests: verify json-atom-py produces the same results as json-diff-ts.
 
 These tests replicate key test cases from json-diff-ts/tests/jsonDelta.test.ts
 to verify behavioral equivalence between the TypeScript and Python implementations.
@@ -8,7 +8,7 @@ import copy
 
 import pytest
 
-from json_delta import (
+from json_atom import (
     apply_delta,
     diff_delta,
     invert_delta,
@@ -35,7 +35,7 @@ class TestValidateDeltaCrossValidation:
     def test_validates_correct_delta(self):
         """TS: it('validates a correct delta')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}],
         }
@@ -46,7 +46,7 @@ class TestValidateDeltaCrossValidation:
     def test_validates_delta_with_x_extension_properties(self):
         """TS: it('validates delta with x_ extension properties')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob", "x_author": "system"}],
             "x_metadata": {"timestamp": 123},
@@ -57,7 +57,7 @@ class TestValidateDeltaCrossValidation:
 
     def test_validates_delta_with_empty_operations(self):
         """TS: it('validates delta with empty operations')"""
-        delta = {"format": "json-delta", "version": 1, "operations": []}
+        delta = {"format": "json-atom", "version": 1, "operations": []}
         result = validate_delta(delta)
         assert result.valid is True
 
@@ -74,20 +74,20 @@ class TestValidateDeltaCrossValidation:
 
     def test_rejects_missing_version(self):
         """TS: it('rejects missing version')"""
-        result = validate_delta({"format": "json-delta", "operations": []})
+        result = validate_delta({"format": "json-atom", "operations": []})
         assert result.valid is False
         assert any("version" in e for e in result.errors)
 
     def test_rejects_missing_operations(self):
         """TS: it('rejects missing operations')"""
-        result = validate_delta({"format": "json-delta", "version": 1})
+        result = validate_delta({"format": "json-atom", "version": 1})
         assert result.valid is False
         assert any("operations" in e for e in result.errors)
 
     def test_rejects_invalid_op(self):
         """TS: it('rejects invalid op')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "move", "path": "$.x"}],
         })
@@ -96,7 +96,7 @@ class TestValidateDeltaCrossValidation:
     def test_rejects_add_with_old_value(self):
         """TS: it('rejects add with oldValue')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 1, "oldValue": 0}],
         })
@@ -105,7 +105,7 @@ class TestValidateDeltaCrossValidation:
     def test_rejects_remove_with_value(self):
         """TS: it('rejects remove with value')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$.x", "value": 1}],
         })
@@ -114,7 +114,7 @@ class TestValidateDeltaCrossValidation:
     def test_rejects_add_without_value(self):
         """TS: it('rejects add without value')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x"}],
         })
@@ -123,7 +123,7 @@ class TestValidateDeltaCrossValidation:
     def test_rejects_replace_without_value(self):
         """TS: it('rejects replace without value')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.x", "oldValue": 1}],
         })
@@ -138,7 +138,7 @@ class TestValidateDeltaCrossValidation:
     def test_rejects_non_object_operation_entries(self):
         """TS: it('rejects non-object operation entries')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [None, "not-an-object"],
         })
@@ -148,7 +148,7 @@ class TestValidateDeltaCrossValidation:
     def test_rejects_operation_with_non_string_path(self):
         """TS: it('rejects operation with non-string path')"""
         result = validate_delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": 123, "value": "x"}],
         })
@@ -166,7 +166,7 @@ class TestDiffDeltaCrossValidation:
         """TS: it('produces empty operations for identical objects')"""
         obj = {"a": 1, "b": "hello"}
         delta = diff_delta(obj, deep_clone(obj))
-        assert delta["format"] == "json-delta"
+        assert delta["format"] == "json-atom"
         assert delta["version"] == 1
         assert delta["operations"] == []
 
@@ -351,7 +351,7 @@ class TestApplyDeltaCrossValidation:
         """TS: it('applies simple property changes')"""
         obj = {"name": "Alice", "age": 30}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"},
@@ -364,7 +364,7 @@ class TestApplyDeltaCrossValidation:
         """TS: it('applies add and remove')"""
         obj = {"a": 1, "b": 2}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.b", "oldValue": 2},
@@ -383,7 +383,7 @@ class TestApplyDeltaCrossValidation:
             ],
         }
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.id=='1')].name", "value": "Widget Pro", "oldValue": "Widget"},
@@ -395,7 +395,7 @@ class TestApplyDeltaCrossValidation:
     def test_root_add_from_null(self):
         """TS: it('applies root add (from null)')"""
         result = apply_delta(None, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$", "value": {"hello": "world"}}],
         })
@@ -404,7 +404,7 @@ class TestApplyDeltaCrossValidation:
     def test_root_remove_to_null(self):
         """TS: it('applies root remove (to null)')"""
         result = apply_delta({"hello": "world"}, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$", "oldValue": {"hello": "world"}}],
         })
@@ -415,7 +415,7 @@ class TestApplyDeltaCrossValidation:
         result = apply_delta(
             {"old": True},
             {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$", "value": {"new": True}, "oldValue": {"old": True}}],
             },
@@ -427,7 +427,7 @@ class TestApplyDeltaCrossValidation:
         result = apply_delta(
             "old",
             {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$", "value": "new", "oldValue": "old"}],
             },
@@ -439,7 +439,7 @@ class TestApplyDeltaCrossValidation:
         result = apply_delta(
             {"old": True},
             {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$", "value": [1, 2, 3], "oldValue": {"old": True}}],
             },
@@ -452,7 +452,7 @@ class TestApplyDeltaCrossValidation:
         result = apply_delta(
             [1, 2, 3],
             {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$", "value": {"new": True}, "oldValue": [1, 2, 3]}],
             },
@@ -465,7 +465,7 @@ class TestApplyDeltaCrossValidation:
         result = apply_delta(
             [1, 2],
             {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$", "value": [3, 4, 5], "oldValue": [1, 2]}],
             },
@@ -479,7 +479,7 @@ class TestApplyDeltaCrossValidation:
         # Remove index 1 ('b'), array becomes ['a', 'c']
         # Then replace index 1 (now 'c') with 'd'
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.items[1]", "oldValue": "b"},
@@ -516,7 +516,7 @@ class TestRevertDeltaCrossValidation:
     def test_throws_on_non_reversible_delta(self):
         """TS: it('throws on non-reversible delta (missing oldValue)')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob"}],
         }
@@ -533,7 +533,7 @@ class TestInvertDeltaCrossValidation:
     def test_inverts_add_to_remove(self):
         """TS: it('inverts add → remove')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 42}],
         }
@@ -543,7 +543,7 @@ class TestInvertDeltaCrossValidation:
     def test_inverts_remove_to_add(self):
         """TS: it('inverts remove → add')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$.x", "oldValue": 42}],
         }
@@ -553,7 +553,7 @@ class TestInvertDeltaCrossValidation:
     def test_inverts_replace_swaps_values(self):
         """TS: it('inverts replace (swaps value and oldValue)')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}],
         }
@@ -565,7 +565,7 @@ class TestInvertDeltaCrossValidation:
     def test_reverses_operation_order(self):
         """TS: it('reverses operation order')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.a", "value": 1},
@@ -579,7 +579,7 @@ class TestInvertDeltaCrossValidation:
     def test_throws_when_replace_missing_old_value(self):
         """TS: it('throws when replace missing oldValue')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.x", "value": 42}],
         }
@@ -589,7 +589,7 @@ class TestInvertDeltaCrossValidation:
     def test_throws_when_remove_missing_old_value(self):
         """TS: it('throws when remove missing oldValue')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$.x"}],
         }
@@ -599,19 +599,19 @@ class TestInvertDeltaCrossValidation:
     def test_preserves_envelope_extension_properties(self):
         """TS: it('preserves envelope extension properties')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 1}],
             "x_source": "test",
         }
         inverse = invert_delta(delta)
         assert inverse["x_source"] == "test"
-        assert inverse["format"] == "json-delta"
+        assert inverse["format"] == "json-atom"
 
     def test_preserves_operation_level_extension_properties(self):
         """TS: it('preserves operation-level extension properties')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.x", "value": 1, "x_author": "alice"}],
         }
@@ -633,7 +633,7 @@ class TestExtensionCrossValidation:
     def test_apply_delta_ignores_extensions(self):
         """TS: it('applyDelta ignores extension properties without error')"""
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice", "x_reason": "rename"}
@@ -655,7 +655,7 @@ class TestConformanceCrossValidation:
         source = {"name": "Alice", "age": 30}
         target = {"name": "Bob", "age": 30}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}
@@ -669,7 +669,7 @@ class TestConformanceCrossValidation:
         source = {"name": "Alice", "age": 30}
         target = {"name": "Bob", "age": 30}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}
@@ -704,7 +704,7 @@ class TestConformanceCrossValidation:
             ]
         }
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.id=='1')].name", "value": "Widget Pro", "oldValue": "Widget"},
@@ -741,7 +741,7 @@ class TestConformanceCrossValidation:
             ]
         }
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.id=='1')].name", "value": "Widget Pro", "oldValue": "Widget"},
@@ -955,7 +955,7 @@ class TestPathCrossValidation:
 
     def test_parse_and_build_round_trips(self):
         """TS: it('round-trips with parseDeltaPath for canonical paths')"""
-        from json_delta import build_path, parse_path
+        from json_atom import build_path, parse_path
 
         paths = [
             "$",
@@ -976,8 +976,8 @@ class TestPathCrossValidation:
         """TS: it('handles filter literal containing )]')
         Note: TS includes RootSegment in parsed output, Python omits it (root $ is implicit).
         """
-        from json_delta import parse_path
-        from json_delta.models import KeyFilterSegment, PropertySegment
+        from json_atom import parse_path
+        from json_atom.models import KeyFilterSegment, PropertySegment
 
         result = parse_path("$.items[?(@.name=='val)]ue')]")
         assert result == [
@@ -987,7 +987,7 @@ class TestPathCrossValidation:
 
     def test_format_filter_literal(self):
         """TS: describe('formatFilterLiteral', ...)"""
-        from json_delta.path import format_filter_literal
+        from json_atom.path import format_filter_literal
 
         assert format_filter_literal("Alice") == "'Alice'"
         assert format_filter_literal("O'Brien") == "'O''Brien'"
@@ -1000,7 +1000,7 @@ class TestPathCrossValidation:
 
     def test_parse_filter_literal(self):
         """TS: describe('parseFilterLiteral', ...)"""
-        from json_delta.path import parse_filter_literal
+        from json_atom.path import parse_filter_literal
 
         assert parse_filter_literal("'Alice'") == "Alice"
         assert parse_filter_literal("'O''Brien'") == "O'Brien"
@@ -1014,7 +1014,7 @@ class TestPathCrossValidation:
 
     def test_parse_filter_literal_rejects_invalid(self):
         """TS: it('rejects non-JSON numeric formats')"""
-        from json_delta.path import parse_filter_literal
+        from json_atom.path import parse_filter_literal
 
         with pytest.raises(Exception):
             parse_filter_literal("")

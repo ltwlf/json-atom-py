@@ -1,13 +1,13 @@
 """Delta document structural validation.
 
-Implements validation per JSON Delta v0 spec Section 4, 6, and Appendix A (JSON Schema).
+Implements validation per JSON Atom v0 spec Section 4, 6, and Appendix A (JSON Schema).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from json_delta.models import ValidationResult
+from json_atom.models import ValidationResult
 
 # Fields defined by the spec for the delta envelope
 _ENVELOPE_REQUIRED = {"format", "version", "operations"}
@@ -17,7 +17,7 @@ _VALID_OPS = {"add", "remove", "replace"}
 
 
 def validate_delta(delta: Any) -> ValidationResult:
-    """Validate the structural correctness of a JSON Delta document.
+    """Validate the structural correctness of a JSON Atom document.
 
     Pure structural check — does NOT validate path well-formedness,
     filter semantics, or value types beyond what's required by the spec.
@@ -35,8 +35,8 @@ def validate_delta(delta: Any) -> ValidationResult:
     # Required field: format
     if "format" not in delta:
         errors.append("Missing required field: 'format'")
-    elif delta["format"] != "json-delta":
-        errors.append(f"Invalid format: expected 'json-delta', got {delta['format']!r}")
+    elif delta["format"] != "json-atom":
+        errors.append(f"Invalid format: expected 'json-atom', got {delta['format']!r}")
 
     # Required field: version
     if "version" not in delta:

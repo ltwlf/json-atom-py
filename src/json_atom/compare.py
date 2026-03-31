@@ -11,15 +11,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from json_delta._identity import (
+from json_atom._identity import (
     ArrayIdentityKeys,
     _ResolvedIdentity,
     extract_identity,
     resolve_identity,
 )
-from json_delta._utils import json_equal, make_hashable, should_exclude_path, validate_json_value
-from json_delta.errors import DiffError
-from json_delta.models import ChangeType, ComparisonNode
+from json_atom._utils import json_equal, make_hashable, should_exclude_path, validate_json_value
+from json_atom.errors import DiffError
+from json_atom.models import ChangeType, ComparisonNode
 
 
 def compare(
