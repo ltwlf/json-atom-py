@@ -7,13 +7,13 @@ a delta payload, validates it, applies it, and can revert if needed.
 import copy
 import json
 
-from json_delta import Delta, apply_delta, revert_delta, validate_delta
+from json_atom import Delta, apply_delta, revert_delta, validate_delta
 
 # --- 1. Receive a raw JSON payload (e.g., from an API request body) ---
 
 raw_json = """
 {
-  "format": "json-delta",
+  "format": "json-atom",
   "version": 1,
   "operations": [
     {"op": "replace", "path": "$.user.role", "value": "admin", "oldValue": "viewer"},

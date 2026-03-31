@@ -1,11 +1,11 @@
-"""Tests for json_delta.apply — delta application."""
+"""Tests for json_atom.apply — delta application."""
 
 import copy
 
 import pytest
 
-from json_delta.apply import apply_delta
-from json_delta.errors import ApplyError
+from json_atom.apply import apply_delta
+from json_atom.errors import ApplyError
 
 from tests.conftest import deep_clone, load_fixture
 
@@ -19,7 +19,7 @@ class TestPropertyReplace:
     def test_simple_replace(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}
@@ -31,7 +31,7 @@ class TestPropertyReplace:
     def test_nested_replace(self) -> None:
         obj = {"user": {"address": {"city": "Portland"}}}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.user.address.city", "value": "Seattle", "oldValue": "Portland"}
@@ -43,7 +43,7 @@ class TestPropertyReplace:
     def test_replace_non_existent_raises(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.missing", "value": "x"}
@@ -57,7 +57,7 @@ class TestPropertyAdd:
     def test_simple_add(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.role", "value": "admin"}
@@ -70,7 +70,7 @@ class TestPropertyAdd:
     def test_add_on_existing_raises(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.name", "value": "Bob"}
@@ -84,7 +84,7 @@ class TestPropertyRemove:
     def test_simple_remove(self) -> None:
         obj = {"name": "Alice", "role": "admin"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.role"}
@@ -97,7 +97,7 @@ class TestPropertyRemove:
     def test_remove_non_existent_raises(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.missing"}
@@ -115,7 +115,7 @@ class TestPropertyRemove:
 class TestRootOperations:
     def test_root_add_from_null(self) -> None:
         result = apply_delta(None, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$", "value": {"created": True}}],
         })
@@ -124,14 +124,14 @@ class TestRootOperations:
     def test_root_add_from_non_null_raises(self) -> None:
         with pytest.raises(ApplyError, match="null"):
             apply_delta({"x": 1}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "add", "path": "$", "value": {"new": True}}],
             })
 
     def test_root_remove_to_null(self) -> None:
         result = apply_delta({"name": "Alice"}, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$", "oldValue": {"name": "Alice"}}],
         })
@@ -140,14 +140,14 @@ class TestRootOperations:
     def test_root_remove_from_null_raises(self) -> None:
         with pytest.raises(ApplyError, match="non-null"):
             apply_delta(None, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "remove", "path": "$"}],
             })
 
     def test_root_replace(self) -> None:
         result = apply_delta({"old": True}, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$", "value": {"new": True}, "oldValue": {"old": True}}],
         })
@@ -155,7 +155,7 @@ class TestRootOperations:
 
     def test_root_replace_object_to_array(self) -> None:
         result = apply_delta({"x": 1}, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$", "value": [1, 2, 3]}],
         })
@@ -163,7 +163,7 @@ class TestRootOperations:
 
     def test_root_replace_object_to_primitive(self) -> None:
         result = apply_delta({"x": 1}, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$", "value": "hello"}],
         })
@@ -172,7 +172,7 @@ class TestRootOperations:
     def test_root_replace_from_null_raises(self) -> None:
         with pytest.raises(ApplyError, match="non-null"):
             apply_delta(None, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$", "value": {"new": True}}],
             })
@@ -187,7 +187,7 @@ class TestIndexOperations:
     def test_index_replace(self) -> None:
         obj = {"tags": ["urgent", "review", "draft"]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.tags[1]", "value": "approved"}],
         })
@@ -196,7 +196,7 @@ class TestIndexOperations:
     def test_index_add_inserts(self) -> None:
         obj = {"items": [1, 2, 3]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.items[1]", "value": 99}],
         })
@@ -205,7 +205,7 @@ class TestIndexOperations:
     def test_index_add_at_end(self) -> None:
         obj = {"items": [1, 2]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.items[2]", "value": 3}],
         })
@@ -214,7 +214,7 @@ class TestIndexOperations:
     def test_index_remove(self) -> None:
         obj = {"items": [1, 2, 3]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$.items[1]"}],
         })
@@ -224,7 +224,7 @@ class TestIndexOperations:
         obj = {"items": [1, 2]}
         with pytest.raises(ApplyError, match="out of range"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "$.items[5]", "value": 99}],
             })
@@ -240,7 +240,7 @@ class TestKeyFilterOperations:
         """Replace a property within a keyed-array element."""
         obj = {"items": [{"id": 1, "name": "Widget", "price": 10}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.id==1)].name", "value": "Widget Pro"}
@@ -252,7 +252,7 @@ class TestKeyFilterOperations:
         """Add a new element to a keyed array."""
         obj = {"items": [{"id": 1, "name": "Widget"}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.items[?(@.id==2)]", "value": {"id": 2, "name": "Gadget"}}
@@ -264,7 +264,7 @@ class TestKeyFilterOperations:
     def test_key_filter_remove_element(self) -> None:
         obj = {"items": [{"id": 1, "name": "Widget"}, {"id": 2, "name": "Gadget"}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.items[?(@.id==2)]"}
@@ -276,7 +276,7 @@ class TestKeyFilterOperations:
     def test_key_filter_with_string_literal(self) -> None:
         obj = {"items": [{"id": "a", "val": 1}, {"id": "b", "val": 2}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.id=='b')].val", "value": 99}
@@ -287,7 +287,7 @@ class TestKeyFilterOperations:
     def test_key_filter_with_boolean_literal(self) -> None:
         obj = {"flags": [{"active": True, "name": "a"}, {"active": False, "name": "b"}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.flags[?(@.active==true)].name", "value": "updated"}
@@ -298,7 +298,7 @@ class TestKeyFilterOperations:
     def test_key_filter_with_null_literal(self) -> None:
         obj = {"items": [{"status": None, "name": "pending"}, {"status": "done", "name": "finished"}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.status==null)].name", "value": "waiting"}
@@ -310,7 +310,7 @@ class TestKeyFilterOperations:
         obj = {"items": [{"id": 1, "name": "Widget"}]}
         with pytest.raises(ApplyError, match="zero"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "replace", "path": "$.items[?(@.id==99)].name", "value": "x"}
@@ -321,7 +321,7 @@ class TestKeyFilterOperations:
         obj = {"items": [{"id": 1, "name": "A"}, {"id": 1, "name": "B"}]}
         with pytest.raises(ApplyError, match="2 elements"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "replace", "path": "$.items[?(@.id==1)].name", "value": "x"}
@@ -338,7 +338,7 @@ class TestValueFilterOperations:
     def test_value_filter_remove_string(self) -> None:
         obj = {"tags": ["urgent", "review", "draft"]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "remove", "path": "$.tags[?(@=='draft')]"}
@@ -349,7 +349,7 @@ class TestValueFilterOperations:
     def test_value_filter_add(self) -> None:
         obj = {"tags": ["urgent"]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.tags[?(@=='new')]", "value": "new"}
@@ -360,7 +360,7 @@ class TestValueFilterOperations:
     def test_value_filter_replace_number(self) -> None:
         obj = {"scores": [10, 20, 30]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.scores[?(@==20)]", "value": 25}
@@ -371,7 +371,7 @@ class TestValueFilterOperations:
     def test_value_filter_add_number(self) -> None:
         obj = {"scores": [10, 20, 30]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.scores[?(@==40)]", "value": 40}
@@ -383,7 +383,7 @@ class TestValueFilterOperations:
         obj = {"tags": ["urgent"]}
         with pytest.raises(ApplyError, match="already matches"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "add", "path": "$.tags[?(@=='urgent')]", "value": "urgent"}
@@ -393,7 +393,7 @@ class TestValueFilterOperations:
     def test_value_filter_replace_string(self) -> None:
         obj = {"tags": ["urgent", "review", "draft"]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.tags[?(@=='review')]", "value": "approved"}
@@ -405,7 +405,7 @@ class TestValueFilterOperations:
         obj = {"tags": "not-an-array"}
         with pytest.raises(ApplyError, match="value filter"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "remove", "path": "$.tags[?(@=='x')]"}
@@ -416,7 +416,7 @@ class TestValueFilterOperations:
         obj = {"tags": ["urgent"]}
         with pytest.raises(ApplyError, match="zero"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "remove", "path": "$.tags[?(@=='missing')]"}
@@ -434,7 +434,7 @@ class TestKeyedArrayConsistency:
         """Value contains matching identity property."""
         obj = {"items": []}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.items[?(@.id==1)]", "value": {"id": 1, "name": "Widget"}}
@@ -446,7 +446,7 @@ class TestKeyedArrayConsistency:
         obj = {"items": []}
         with pytest.raises(ApplyError, match="identity property"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "add", "path": "$.items[?(@.id==1)]", "value": {"name": "Widget"}}
@@ -457,7 +457,7 @@ class TestKeyedArrayConsistency:
         obj = {"items": []}
         with pytest.raises(ApplyError, match="mismatch"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "add", "path": "$.items[?(@.id==1)]", "value": {"id": 99, "name": "Widget"}}
@@ -469,7 +469,7 @@ class TestKeyedArrayConsistency:
         obj = {"items": []}
         with pytest.raises(ApplyError, match="mismatch"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "add", "path": "$.items[?(@.id=='4')]", "value": {"id": 4, "name": "Widget"}}
@@ -480,7 +480,7 @@ class TestKeyedArrayConsistency:
         obj = {"items": []}
         with pytest.raises(ApplyError, match="object"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "add", "path": "$.items[?(@.id==1)]", "value": "not-a-dict"}
@@ -492,7 +492,7 @@ class TestKeyedArrayConsistency:
         obj = {"items": [{"id": 1, "name": "Widget"}]}
         with pytest.raises(ApplyError, match="mismatch"):
             apply_delta(obj, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "replace", "path": "$.items[?(@.id==1)]", "value": {"id": 99, "name": "Other"}}
@@ -503,7 +503,7 @@ class TestKeyedArrayConsistency:
         """When path has trailing segments after filter, consistency check does NOT apply."""
         obj = {"items": [{"id": 1, "name": "Widget"}]}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.items[?(@.id==1)].name", "value": "Gizmo"}
@@ -522,7 +522,7 @@ class TestSequentialOperations:
         """Subsequent operations see the state after previous operations."""
         obj = {"counter": 0, "items": []}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.counter", "value": 1, "oldValue": 0},
@@ -536,7 +536,7 @@ class TestSequentialOperations:
         """apply_delta mutates the object in place for non-root operations."""
         obj = {"name": "Alice"}
         result = apply_delta(obj, {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob"}
@@ -559,7 +559,7 @@ class TestErrorConditions:
     def test_malformed_path_raises(self) -> None:
         with pytest.raises(ApplyError):
             apply_delta({"x": 1}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [{"op": "replace", "path": "bad.path", "value": "x"}],
             })
@@ -567,7 +567,7 @@ class TestErrorConditions:
     def test_navigate_property_on_non_object_raises(self) -> None:
         with pytest.raises(ApplyError):
             apply_delta({"x": "string_value"}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "replace", "path": "$.x.nested", "value": "y"}
@@ -577,7 +577,7 @@ class TestErrorConditions:
     def test_navigate_index_on_non_array_raises(self) -> None:
         with pytest.raises(ApplyError):
             apply_delta({"x": "not-array"}, {
-                "format": "json-delta",
+                "format": "json-atom",
                 "version": 1,
                 "operations": [
                     {"op": "replace", "path": "$.x[0]", "value": "y"}

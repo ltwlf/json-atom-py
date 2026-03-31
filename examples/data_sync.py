@@ -9,7 +9,7 @@ Run: uv run python examples/data_sync.py
 import copy
 import json
 
-from json_delta import Delta, apply_delta, diff_delta, validate_delta
+from json_atom import Delta, apply_delta, diff_delta, validate_delta
 
 # Server holds the current team directory
 server_state = {

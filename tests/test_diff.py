@@ -1,14 +1,14 @@
-"""Tests for json_delta.diff — delta computation."""
+"""Tests for json_atom.diff — delta computation."""
 
 import re
 
 import pytest
 
-from json_delta._identity import IdentityResolver
-from json_delta.apply import apply_delta
-from json_delta.diff import diff_delta
-from json_delta.errors import DiffError
-from json_delta.invert import invert_delta
+from json_atom._identity import IdentityResolver
+from json_atom.apply import apply_delta
+from json_atom.diff import diff_delta
+from json_atom.errors import DiffError
+from json_atom.invert import invert_delta
 
 from tests.conftest import deep_clone, load_fixture
 
@@ -328,7 +328,7 @@ class TestNestedArrayKeys:
 class TestDeltaFormat:
     def test_envelope_fields(self) -> None:
         delta = diff_delta({"a": 1}, {"a": 2})
-        assert delta["format"] == "json-delta"
+        assert delta["format"] == "json-atom"
         assert delta["version"] == 1
         assert isinstance(delta["operations"], list)
 
@@ -575,7 +575,7 @@ class TestCallableIdentityKeys:
     def test_resolver_error_wrapped(self) -> None:
         """Resolver exceptions are wrapped in DiffError with context."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Identity resolver.*failed"):
             diff_delta(
                 {"items": [{"id": 1, "v": "a"}]},
@@ -586,7 +586,7 @@ class TestCallableIdentityKeys:
     def test_resolver_non_scalar_rejected(self) -> None:
         """Resolver returning a non-scalar value raises DiffError."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="filter path would not match"):
             diff_delta(
                 {"items": [{"id": 1, "v": "a"}]},
@@ -705,7 +705,7 @@ class TestDuplicateIdentity:
     def test_duplicate_in_old_raises(self) -> None:
         """Duplicate identity keys in old array raise DiffError."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate identity"):
             diff_delta(
                 {"items": [{"id": 1, "v": "a"}, {"id": 1, "v": "b"}]},
@@ -716,7 +716,7 @@ class TestDuplicateIdentity:
     def test_duplicate_in_new_raises(self) -> None:
         """Duplicate identity keys in new array raise DiffError."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate identity"):
             diff_delta(
                 {"items": [{"id": 1, "v": "a"}]},
@@ -734,7 +734,7 @@ class TestValueDuplicates:
     def test_duplicate_in_new_raises(self) -> None:
         """$value identity rejects duplicates in new array."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate value.*\\$value identity requires unique"):
             diff_delta(
                 {"tags": ["a"]},
@@ -745,7 +745,7 @@ class TestValueDuplicates:
     def test_duplicate_in_old_raises(self) -> None:
         """$value identity rejects duplicates in old array."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate value.*\\$value identity requires unique"):
             diff_delta(
                 {"tags": ["a", "a"]},
@@ -756,7 +756,7 @@ class TestValueDuplicates:
     def test_duplicate_in_both_raises(self) -> None:
         """$value identity rejects duplicates even when both sides differ."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate value.*\\$value identity requires unique"):
             diff_delta(
                 {"tags": ["a", "a", "b"]},
@@ -779,7 +779,7 @@ class TestValueDuplicates:
     def test_non_scalar_in_old_raises(self) -> None:
         """$value identity rejects non-scalar elements in old array."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Non-scalar value.*\\$value identity requires scalar"):
             diff_delta(
                 {"tags": [{"x": 1}]},
@@ -790,10 +790,135 @@ class TestValueDuplicates:
     def test_non_scalar_in_new_raises(self) -> None:
         """$value identity rejects non-scalar elements in new array."""
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Non-scalar value.*\\$value identity requires scalar"):
             diff_delta(
                 {"tags": ["a"]},
                 {"tags": [["nested"]]},
                 array_identity_keys={"tags": "$value"},
             )
+
+
+# ---------------------------------------------------------------------------
+# squash_deltas
+# ---------------------------------------------------------------------------
+
+
+class TestSquashDeltas:
+    def test_two_property_changes(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"name": "Alice", "age": 30}
+        d1 = diff_delta(source, {"name": "Bob", "age": 30})
+        intermediate = apply_delta(deep_clone(source), d1)
+        d2 = diff_delta(intermediate, {"name": "Bob", "age": 31})
+        squashed = squash_deltas(source, d1, d2)
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == {"name": "Bob", "age": 31}
+
+    def test_add_then_remove_cancels(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"x": 1}
+        d1 = diff_delta(source, {"x": 1, "y": 2})
+        intermediate = apply_delta(deep_clone(source), d1)
+        d2 = diff_delta(intermediate, {"x": 1})
+        squashed = squash_deltas(source, d1, d2)
+        assert squashed.is_empty
+
+    def test_empty_deltas(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"x": 1}
+        squashed = squash_deltas(source)
+        assert squashed.is_empty
+
+    def test_single_delta(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"x": 1}
+        d1 = diff_delta(source, {"x": 2})
+        squashed = squash_deltas(source, d1)
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == {"x": 2}
+
+    def test_keyed_array(self) -> None:
+        from json_atom.diff import squash_deltas
+        keys = {"items": "id"}
+        source = {"items": [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]}
+        d1 = diff_delta(
+            source,
+            {"items": [{"id": 1, "name": "A2"}, {"id": 2, "name": "B"}]},
+            array_identity_keys=keys,
+        )
+        intermediate = apply_delta(deep_clone(source), d1)
+        d2 = diff_delta(
+            intermediate,
+            {"items": [{"id": 1, "name": "A2"}, {"id": 2, "name": "B2"}]},
+            array_identity_keys=keys,
+        )
+        squashed = squash_deltas(source, d1, d2, array_identity_keys=keys)
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == {"items": [{"id": 1, "name": "A2"}, {"id": 2, "name": "B2"}]}
+
+    def test_envelope_extension_merge(self) -> None:
+        from json_atom.diff import squash_deltas
+        from json_atom.models import Delta, Operation
+        source = {"x": 1}
+        d1 = Delta.create(Operation.replace("$.x", 2, old_value=1), x_author="alice")
+        d2 = Delta.create(Operation.replace("$.x", 3, old_value=2), x_author="bob", x_ts="now")
+        squashed = squash_deltas(source, d1, d2)
+        assert squashed["x_author"] == "bob"  # last-wins
+        assert squashed["x_ts"] == "now"
+
+    def test_direct_source_target(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"x": 1, "y": 2}
+        target = {"x": 3, "y": 2}
+        squashed = squash_deltas(source, target=target)
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == target
+
+    def test_verify_target_raises_on_mismatch(self) -> None:
+        from json_atom.diff import squash_deltas
+        from json_atom.models import Delta, Operation
+        source = {"x": 1}
+        d1 = Delta.create(Operation.replace("$.x", 2, old_value=1))
+        wrong_target = {"x": 99}
+        # verify_target=True is the default — mismatched target raises
+        with pytest.raises(DiffError, match="does not match"):
+            squash_deltas(source, d1, target=wrong_target)
+
+    def test_verify_target_passes_on_match(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"x": 1}
+        d1 = diff_delta(source, {"x": 2})
+        # verify_target=True is the default — correct target passes
+        squashed = squash_deltas(source, d1, target={"x": 2})
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == {"x": 2}
+
+    def test_verify_target_false_skips_check(self) -> None:
+        from json_atom.diff import squash_deltas
+        from json_atom.models import Delta, Operation
+        source = {"x": 1}
+        d1 = Delta.create(Operation.replace("$.x", 2, old_value=1))
+        wrong_target = {"x": 99}
+        # verify_target=False trusts the caller — wrong target silently accepted
+        squashed = squash_deltas(source, d1, target=wrong_target, verify_target=False)
+        # Result is diff(source, wrong_target), not diff(source, apply(source, d1))
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == {"x": 99}
+
+    def test_reversible_false(self) -> None:
+        from json_atom.diff import squash_deltas
+        source = {"x": 1}
+        d1 = diff_delta(source, {"x": 2})
+        squashed = squash_deltas(source, d1, reversible=False)
+        assert not squashed.is_reversible
+
+    def test_delta_squash_classmethod(self) -> None:
+        from json_atom.models import Delta
+        source = {"x": 1}
+        d1 = diff_delta(source, {"x": 2})
+        intermediate = apply_delta(deep_clone(source), d1)
+        d2 = diff_delta(intermediate, {"x": 3})
+        squashed = Delta.squash(source, d1, d2)
+        result = apply_delta(deep_clone(source), squashed)
+        assert result == {"x": 3}

@@ -1,8 +1,8 @@
 """Tests for extension property preservation across all operations."""
 
-from json_delta.apply import apply_delta
-from json_delta.invert import invert_delta
-from json_delta.validate import validate_delta
+from json_atom.apply import apply_delta
+from json_atom.invert import invert_delta
+from json_atom.validate import validate_delta
 
 from tests.conftest import deep_clone
 
@@ -10,7 +10,7 @@ from tests.conftest import deep_clone
 class TestValidateExtensions:
     def test_accepts_envelope_extensions(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [],
             "x_author": "jane@example.com",
@@ -21,7 +21,7 @@ class TestValidateExtensions:
 
     def test_accepts_operation_extensions(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {
@@ -38,7 +38,7 @@ class TestValidateExtensions:
 
     def test_accepts_non_x_prefix_unknown_properties(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [],
             "metadata": {"source": "test"},
@@ -51,7 +51,7 @@ class TestApplyExtensions:
     def test_ignores_envelope_extensions(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob"}
@@ -64,7 +64,7 @@ class TestApplyExtensions:
     def test_ignores_operation_extensions(self) -> None:
         obj = {"name": "Alice"}
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {
@@ -82,7 +82,7 @@ class TestApplyExtensions:
 class TestInvertExtensions:
     def test_preserves_envelope_extensions(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.name", "value": "Bob", "oldValue": "Alice"}
@@ -93,12 +93,12 @@ class TestInvertExtensions:
         inverse = invert_delta(delta)
         assert inverse["x_author"] == "jane@example.com"
         assert inverse["x_timestamp"] == "2025-01-15T10:30:00Z"
-        assert inverse["format"] == "json-delta"
+        assert inverse["format"] == "json-atom"
         assert inverse["version"] == 1
 
     def test_preserves_operation_extensions(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {
@@ -121,7 +121,7 @@ class TestInvertExtensions:
 
     def test_preserves_extensions_on_all_op_types(self) -> None:
         delta = {
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.role", "value": "admin", "x_tag": "a"},

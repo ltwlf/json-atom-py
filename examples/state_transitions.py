@@ -8,7 +8,7 @@ Run: uv run python examples/state_transitions.py
 
 import copy
 
-from json_delta import apply_delta, diff_delta
+from json_atom import apply_delta, diff_delta
 
 # An AI agent's state evolving over multiple steps
 states = [

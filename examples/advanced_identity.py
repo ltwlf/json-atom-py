@@ -1,6 +1,6 @@
 """Advanced identity — callable keys, regex routing, and enriched comparison.
 
-Shows JSON Delta's advanced array identity features: custom identity
+Shows JSON Atom's advanced array identity features: custom identity
 resolvers, regex-based key routing, exclude_paths, and the enriched
 comparison tree for visual diff rendering.
 
@@ -10,7 +10,7 @@ Run: uv run python examples/advanced_identity.py
 import copy
 import re
 
-from json_delta import (
+from json_atom import (
     ChangeType,
     IdentityResolver,
     apply_delta,

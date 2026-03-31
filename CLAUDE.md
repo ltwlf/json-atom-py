@@ -1,4 +1,4 @@
-# CLAUDE.md — Developer Guide for json-delta-py
+# CLAUDE.md — Developer Guide for json-atom-py
 
 ## Build & Test Commands
 
@@ -6,7 +6,7 @@
 uv sync                          # Install dependencies
 uv run pytest tests/             # Run all tests
 uv run pytest tests/ -v          # Verbose output
-uv run pytest tests/ --cov=json_delta  # With coverage
+uv run pytest tests/ --cov=json_atom  # With coverage
 uv run ruff check src/           # Lint
 uv run mypy src/                 # Type check
 uv run python examples/keyed_arrays.py  # Run an example
@@ -16,7 +16,7 @@ uv build                         # Build wheel + sdist
 ## Project Structure
 
 ```
-src/json_delta/
+src/json_atom/
     __init__.py       # Public API re-exports and __all__
     errors.py         # Exception hierarchy (JsonDeltaError → PathError, ApplyError, etc.)
     models.py         # PathSegment dataclasses, ValidationResult, ChangeType, ComparisonNode, Delta/Operation
@@ -33,7 +33,7 @@ src/json_delta/
 
 tests/
     conftest.py       # Shared helpers: load_fixture, deep_clone
-    fixtures/         # Conformance fixtures from json-delta-format repo
+    fixtures/         # Conformance fixtures from json-atom-format repo
     test_models.py    # PathSegment, ValidationResult, Delta/Operation types
     test_utils.py     # json_equal edge cases (bool vs int, int vs float)
     test_path.py      # Path parser/builder, describe_path, resolve_path
@@ -63,7 +63,7 @@ tests/
 
 ## Spec Compliance
 
-- **Specification**: [JSON Delta v0](https://github.com/ltwlf/json-delta-format/blob/main/spec/v0.md)
+- **Specification**: [JSON Atom v0](https://github.com/ltwlf/json-atom-format/blob/main/spec/v0.md)
 - **Conformance**: Level 2 (Apply + Reversible) — passes all fixtures
 - **Spec is source of truth** — when spec and TypeScript reference diverge, follow the spec
 - **Spec-faithful divergence from TS**: digit-after-dot (`$.items.0`) is a PathError per spec grammar

@@ -1,12 +1,12 @@
-"""Exception hierarchy for json-delta."""
+"""Exception hierarchy for json-atom."""
 
 
 class JsonDeltaError(Exception):
-    """Base exception for all json-delta errors."""
+    """Base exception for all json-atom errors."""
 
 
 class PathError(JsonDeltaError):
-    """Invalid or malformed JSON Delta Path expression."""
+    """Invalid or malformed JSON Atom Path expression."""
 
 
 class ApplyError(JsonDeltaError):

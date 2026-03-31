@@ -1,12 +1,12 @@
-"""Tests for json_delta.json_patch — JSON Patch (RFC 6902) interop."""
+"""Tests for json_atom.json_patch — JSON Patch (RFC 6902) interop."""
 
 import copy
 
 import pytest
 
-from json_delta import diff_delta
-from json_delta.json_patch import from_json_patch, to_json_patch
-from json_delta.models import Delta, Operation
+from json_atom import diff_delta
+from json_atom.json_patch import from_json_patch, to_json_patch
+from json_atom.models import Delta, Operation
 
 
 # ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ from json_delta.models import Delta, Operation
 class TestToJsonPatch:
     def test_simple_replace(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.name", "value": "Bob"}],
         })
@@ -27,7 +27,7 @@ class TestToJsonPatch:
 
     def test_simple_add(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "add", "path": "$.email", "value": "a@b.com"}],
         })
@@ -37,7 +37,7 @@ class TestToJsonPatch:
 
     def test_simple_remove(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "remove", "path": "$.name"}],
         })
@@ -48,7 +48,7 @@ class TestToJsonPatch:
     def test_key_filter_resolve(self) -> None:
         doc = {"items": [{"id": 1, "name": "Widget"}, {"id": 2, "name": "Gadget"}]}
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.items[?(@.id==2)].name", "value": "Super Gadget"}],
         })
@@ -58,7 +58,7 @@ class TestToJsonPatch:
     def test_add_new_array_element_uses_dash(self) -> None:
         doc = {"items": [{"id": 1, "name": "Widget"}]}
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "add", "path": "$.items[?(@.id==2)]", "value": {"id": 2, "name": "Gadget"}},
@@ -70,7 +70,7 @@ class TestToJsonPatch:
     def test_multiple_operations(self) -> None:
         doc = {"x": 1, "y": 2}
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [
                 {"op": "replace", "path": "$.x", "value": 10},
@@ -86,7 +86,7 @@ class TestToJsonPatch:
 
     def test_oldValue_not_included(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.x", "value": 2, "oldValue": 1}],
         })
@@ -95,7 +95,7 @@ class TestToJsonPatch:
 
     def test_delta_method(self) -> None:
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$.x", "value": 2}],
         })
@@ -105,7 +105,7 @@ class TestToJsonPatch:
     def test_pointer_escaping(self) -> None:
         doc = {"a/b": {"c~d": 1}}
         delta = Delta({
-            "format": "json-delta",
+            "format": "json-atom",
             "version": 1,
             "operations": [{"op": "replace", "path": "$['a/b']['c~d']", "value": 2}],
         })
@@ -123,7 +123,7 @@ class TestFromJsonPatch:
         patch = [{"op": "add", "path": "/name", "value": "Alice"}]
         delta = from_json_patch(patch)
         assert isinstance(delta, Delta)
-        assert delta.format == "json-delta"
+        assert delta.format == "json-atom"
         assert delta.version == 1
         assert len(delta.operations) == 1
         assert delta.operations[0].op == "add"

@@ -1,6 +1,6 @@
 """Key-based array identity — track inventory changes by SKU, not position.
 
-Shows how JSON Delta handles arrays where elements have a stable identity
+Shows how JSON Atom handles arrays where elements have a stable identity
 key, producing diffs that survive insertions, deletions, and reordering.
 
 Run: uv run python examples/keyed_arrays.py
@@ -9,7 +9,7 @@ Run: uv run python examples/keyed_arrays.py
 import copy
 import json
 
-from json_delta import apply_delta, diff_delta, invert_delta
+from json_atom import apply_delta, diff_delta, invert_delta
 
 # Current product inventory
 source = {

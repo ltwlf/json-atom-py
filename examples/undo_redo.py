@@ -1,6 +1,6 @@
 """Undo/redo — reversible configuration editing.
 
-A deployment config editor backed by JSON Delta. Each change
+A deployment config editor backed by JSON Atom. Each change
 is a reversible delta, enabling multi-step undo and redo.
 
 Run: uv run python examples/undo_redo.py
@@ -9,7 +9,7 @@ Run: uv run python examples/undo_redo.py
 import copy
 from typing import Any
 
-from json_delta import Delta, apply_delta, diff_delta, invert_delta
+from json_atom import Delta, apply_delta, diff_delta, invert_delta
 
 
 class ConfigEditor:

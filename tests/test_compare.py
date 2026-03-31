@@ -1,8 +1,8 @@
-"""Tests for json_delta.compare — enriched comparison tree."""
+"""Tests for json_atom.compare — enriched comparison tree."""
 
-from json_delta._identity import IdentityResolver
-from json_delta.compare import compare
-from json_delta.models import ChangeType, ComparisonNode
+from json_atom._identity import IdentityResolver
+from json_atom.compare import compare
+from json_atom.models import ChangeType, ComparisonNode
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +495,7 @@ class TestDuplicateIdentity:
 
     def test_duplicate_in_old_array(self) -> None:
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate identity.*at items"):
             compare(
                 {"items": [{"id": 1, "v": "a"}, {"id": 1, "v": "b"}]},
@@ -505,7 +505,7 @@ class TestDuplicateIdentity:
 
     def test_duplicate_in_new_array(self) -> None:
         import pytest
-        from json_delta.errors import DiffError
+        from json_atom.errors import DiffError
         with pytest.raises(DiffError, match="Duplicate identity.*at items"):
             compare(
                 {"items": [{"id": 1, "v": "a"}]},
@@ -559,3 +559,190 @@ class TestComparisonNodeProperties:
     def test_repr(self) -> None:
         node = ComparisonNode(type=ChangeType.REPLACED, value="new", old_value="old")
         assert "REPLACED" in repr(node)
+
+
+# ---------------------------------------------------------------------------
+# ComparisonNode.to_dict()
+# ---------------------------------------------------------------------------
+
+
+class TestComparisonNodeToDict:
+    def test_unchanged_leaf(self) -> None:
+        node = ComparisonNode(type=ChangeType.UNCHANGED, value=42)
+        assert node.to_dict() == {"type": "unchanged", "value": 42}
+
+    def test_added_leaf(self) -> None:
+        node = ComparisonNode(type=ChangeType.ADDED, value="new")
+        assert node.to_dict() == {"type": "added", "value": "new"}
+
+    def test_removed_leaf(self) -> None:
+        node = ComparisonNode(type=ChangeType.REMOVED, old_value="gone")
+        assert node.to_dict() == {"type": "removed", "old_value": "gone"}
+
+    def test_replaced_leaf(self) -> None:
+        node = ComparisonNode(type=ChangeType.REPLACED, value="new", old_value="old")
+        assert node.to_dict() == {"type": "replaced", "value": "new", "old_value": "old"}
+
+    def test_null_values_preserved(self) -> None:
+        node = ComparisonNode(type=ChangeType.REPLACED, value=None, old_value="old")
+        d = node.to_dict()
+        assert d["value"] is None
+        assert d["old_value"] == "old"
+
+    def test_null_old_value_preserved(self) -> None:
+        node = ComparisonNode(type=ChangeType.REMOVED, old_value=None)
+        d = node.to_dict()
+        assert d["old_value"] is None
+
+    def test_container_object(self) -> None:
+        node = ComparisonNode(
+            type=ChangeType.CONTAINER,
+            value={
+                "name": ComparisonNode(type=ChangeType.REPLACED, value="Bob", old_value="Alice"),
+                "age": ComparisonNode(type=ChangeType.UNCHANGED, value=30),
+            },
+        )
+        d = node.to_dict()
+        assert d["type"] == "container"
+        assert d["value"]["name"] == {"type": "replaced", "value": "Bob", "old_value": "Alice"}
+        assert d["value"]["age"] == {"type": "unchanged", "value": 30}
+
+    def test_container_array(self) -> None:
+        node = ComparisonNode(
+            type=ChangeType.CONTAINER,
+            value=[
+                ComparisonNode(type=ChangeType.UNCHANGED, value=1),
+                ComparisonNode(type=ChangeType.ADDED, value=2),
+            ],
+        )
+        d = node.to_dict()
+        assert d["type"] == "container"
+        assert len(d["value"]) == 2
+        assert d["value"][0] == {"type": "unchanged", "value": 1}
+        assert d["value"][1] == {"type": "added", "value": 2}
+
+    def test_nested_containers(self) -> None:
+        node = compare(
+            {"user": {"name": "Alice", "age": 30}},
+            {"user": {"name": "Bob", "age": 30}},
+        )
+        d = node.to_dict()
+        assert d["type"] == "container"
+        assert d["value"]["user"]["type"] == "container"
+        assert d["value"]["user"]["value"]["name"]["type"] == "replaced"
+        assert d["value"]["user"]["value"]["age"]["type"] == "unchanged"
+
+    def test_json_serializable(self) -> None:
+        import json
+        node = compare({"x": 1, "y": [1, 2]}, {"x": 2, "y": [1, 3]})
+        d = node.to_dict()
+        serialized = json.dumps(d)
+        assert isinstance(serialized, str)
+
+
+# ---------------------------------------------------------------------------
+# ComparisonNode.to_flat_list()
+# ---------------------------------------------------------------------------
+
+
+class TestComparisonNodeToFlatList:
+    def test_simple_object_change(self) -> None:
+        node = compare({"name": "Alice", "age": 30}, {"name": "Bob", "age": 30})
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["path"] == "$.name"
+        assert flat[0]["type"] == "replaced"
+        assert flat[0]["value"] == "Bob"
+        assert flat[0]["old_value"] == "Alice"
+
+    def test_include_unchanged(self) -> None:
+        node = compare({"name": "Alice", "age": 30}, {"name": "Bob", "age": 30})
+        flat = node.to_flat_list(include_unchanged=True)
+        assert len(flat) == 2
+        paths = {e["path"] for e in flat}
+        assert "$.name" in paths
+        assert "$.age" in paths
+
+    def test_added_removed(self) -> None:
+        node = compare({"old": 1}, {"new": 2})
+        flat = node.to_flat_list()
+        types = {e["type"] for e in flat}
+        assert "added" in types
+        assert "removed" in types
+        added = [e for e in flat if e["type"] == "added"][0]
+        assert added["path"] == "$.new"
+        assert added["value"] == 2
+        removed = [e for e in flat if e["type"] == "removed"][0]
+        assert removed["path"] == "$.old"
+        assert removed["old_value"] == 1
+
+    def test_array_paths_use_indices(self) -> None:
+        node = compare([1, 2, 3], [1, 99, 3])
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["path"] == "$[1]"
+        assert flat[0]["type"] == "replaced"
+        assert flat[0]["value"] == 99
+        assert flat[0]["old_value"] == 2
+
+    def test_nested_paths(self) -> None:
+        node = compare(
+            {"users": [{"name": "Alice"}]},
+            {"users": [{"name": "Bob"}]},
+        )
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["path"] == "$.users[0].name"
+
+    def test_empty_when_identical(self) -> None:
+        node = compare({"x": 1}, {"x": 1})
+        flat = node.to_flat_list()
+        assert flat == []
+
+    def test_scalar_change(self) -> None:
+        node = compare(1, 2)
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["path"] == "$"
+        assert flat[0]["type"] == "replaced"
+
+    def test_null_value_in_flat_list(self) -> None:
+        node = compare({"x": "hello"}, {"x": None})
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["value"] is None
+        assert flat[0]["old_value"] == "hello"
+
+    def test_keyed_array_paths_are_display_positions(self) -> None:
+        """Keyed array comparison reorders children; paths are display positions."""
+        node = compare(
+            [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}],
+            [{"id": 2, "name": "B2"}, {"id": 1, "name": "A"}],
+            array_identity_keys={"": "id"},
+        )
+        flat = node.to_flat_list()
+        # Only the rename of id=2 should show
+        assert len(flat) == 1
+        assert flat[0]["type"] == "replaced"
+        # Path uses display index, not source/target index
+        assert "[" in flat[0]["path"]
+
+    def test_non_identifier_keys_use_bracket_notation(self) -> None:
+        """Keys with dots, spaces, or special chars use bracket-quote notation."""
+        node = compare({"a.b": 1, "c d": 2}, {"a.b": 1, "c d": 3})
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["path"] == "$['c d']"
+
+    def test_key_with_single_quote_escaped(self) -> None:
+        """Single quotes in keys are escaped in bracket notation."""
+        node = compare({"it's": 1}, {"it's": 2})
+        flat = node.to_flat_list()
+        assert len(flat) == 1
+        assert flat[0]["path"] == "$['it''s']"
+
+    def test_simple_identifier_keys_use_dot_notation(self) -> None:
+        """Normal identifier keys use standard dot notation."""
+        node = compare({"name": "A"}, {"name": "B"})
+        flat = node.to_flat_list()
+        assert flat[0]["path"] == "$.name"

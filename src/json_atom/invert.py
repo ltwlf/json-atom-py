@@ -1,16 +1,16 @@
-"""Compute the inverse of a reversible JSON Delta document.
+"""Compute the inverse of a reversible JSON Atom document.
 
-Implements Section 9 (Reversibility) of the JSON Delta v0 specification.
+Implements Section 9 (Reversibility) of the JSON Atom v0 specification.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from json_delta.apply import apply_delta
-from json_delta.errors import InvertError
-from json_delta.models import _DELTA_SPEC_KEYS, _OP_SPEC_KEYS, Delta, Operation
-from json_delta.validate import validate_delta
+from json_atom.apply import apply_delta
+from json_atom.errors import InvertError
+from json_atom.models import _DELTA_SPEC_KEYS, _OP_SPEC_KEYS, Delta, Operation
+from json_atom.validate import validate_delta
 
 
 def invert_delta(delta: Delta) -> Delta:

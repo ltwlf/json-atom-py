@@ -1,4 +1,4 @@
-"""Shared test helpers and fixtures for json-delta tests."""
+"""Shared test helpers and fixtures for json-atom tests."""
 
 from __future__ import annotations
 
