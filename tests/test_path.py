@@ -236,7 +236,7 @@ class TestParsePath:
     def test_key_filter_with_bracket_property(self) -> None:
         """$[?(@['dotted.key']==42)] — bracket property in filter."""
         segments = parse_path("$.items[?(@['dotted.key']==42)]")
-        assert segments == [PropertySegment("items"), KeyFilterSegment("dotted.key", 42)]
+        assert segments == [PropertySegment("items"), KeyFilterSegment("dotted.key", 42, literal_key=True)]
 
     def test_value_filter_with_string(self) -> None:
         segments = parse_path("$.tags[?(@=='urgent')]")
@@ -461,6 +461,7 @@ CANONICAL_PATHS = [
     "$.items[?(@.id==1)].address.city",
     "$.users[?(@.id==1)].contacts[0].email",
     "$.items[?(@.dotted.key==42)]",
+    "$.items[?(@['literal.key']==42)]",
 ]
 
 

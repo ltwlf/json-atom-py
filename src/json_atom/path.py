@@ -172,7 +172,7 @@ def _parse_filter(inner: str) -> KeyFilterSegment | ValueFilterSegment:
         if not rest.startswith("]=="):
             raise PathError("Invalid bracket filter syntax: expected ']==' after quoted key")
         literal_str = rest[3:]  # skip ']==
-        return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str))
+        return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str), literal_key=True)
 
     if inner.startswith("=="):
         # Value filter: ==val
@@ -459,7 +459,11 @@ def build_path(
         elif isinstance(seg, KeyFilterSegment):
             prop = seg.property
             literal = format_filter_literal(seg.value)
-            if _NESTED_PATH_RE.match(prop):
+            if seg.literal_key:
+                # Literal property name (from bracket notation) — always bracket
+                escaped_prop = prop.replace("'", "''")
+                parts.append(f"[?(@['{escaped_prop}']=={literal})]")
+            elif _NESTED_PATH_RE.match(prop):
                 # Simple identifier or nested path — dot notation
                 parts.append(f"[?(@.{prop}=={literal})]")
             else:
