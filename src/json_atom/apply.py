@@ -297,11 +297,8 @@ def _apply_key_filter_op(
     if op_type == "add":
         # Filter must NOT match any existing element
         for elem in parent:
-            if (
-                isinstance(elem, dict)
-                and seg.property in elem
-                and json_equal(elem[seg.property], seg.value)
-            ):
+            resolved = _resolve_property(elem, seg.property, literal=seg.literal_key)
+            if resolved is not _SENTINEL and json_equal(resolved, seg.value):
                 raise ApplyError(f"Key filter already matches an element (use 'replace'): {path_str}")
 
         value = op["value"]
@@ -381,14 +378,15 @@ def _validate_keyed_array_consistency(
         raise ApplyError(
             f"Keyed-array value must be an object, got {_type_name(value)}: {path_str}"
         )
-    if seg.property not in value:
+    resolved = _resolve_property(value, seg.property, literal=seg.literal_key)
+    if resolved is _SENTINEL:
         raise ApplyError(
             f"Keyed-array value missing identity property '{seg.property}': {path_str}"
         )
-    if not json_equal(value[seg.property], seg.value):
+    if not json_equal(resolved, seg.value):
         raise ApplyError(
             f"Keyed-array value identity mismatch: "
-            f"filter expects {seg.value!r} but value has {value[seg.property]!r}: {path_str}"
+            f"filter expects {seg.value!r} but value has {resolved!r}: {path_str}"
         )
 
 
