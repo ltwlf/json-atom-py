@@ -595,6 +595,82 @@ class TestCallableIdentityKeys:
             )
 
 
+class TestNestedPathIdentityKeys:
+    """Nested dot-path identity keys (e.g. positionNumber.value → @.positionNumber.value)."""
+
+    def test_nested_path_string_key(self) -> None:
+        """String key with dots resolves nested path."""
+        old = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "beta"},
+        ]}
+        new = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={"items": "positionNumber.value"})
+        remove_ops = [op for op in delta.operations if op.op == "remove"]
+        assert len(remove_ops) == 1
+        assert remove_ops[0].path == "$.items[?(@.positionNumber.value=='002')]"
+
+    def test_nested_path_resolver(self) -> None:
+        """IdentityResolver with nested path produces dot notation."""
+        old = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "beta"},
+        ]}
+        new = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "003"}, "description": "gamma"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": IdentityResolver(
+                "positionNumber.value",
+                lambda e: e["positionNumber"]["value"],
+            ),
+        })
+        assert len(delta.operations) == 2
+        removes = [op for op in delta.operations if op.op == "remove"]
+        adds = [op for op in delta.operations if op.op == "add"]
+        assert len(removes) == 1
+        assert removes[0].path == "$.items[?(@.positionNumber.value=='002')]"
+        assert len(adds) == 1
+        assert adds[0].path == "$.items[?(@.positionNumber.value=='003')]"
+
+    def test_nested_path_update_within_element(self) -> None:
+        """Update a property inside an element with nested identity path."""
+        old = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "beta"},
+        ]}
+        new = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "updated"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": "positionNumber.value",
+        })
+        assert len(delta.operations) == 1
+        assert delta.operations[0].op == "replace"
+        assert delta.operations[0].path == "$.items[?(@.positionNumber.value=='002')].description"
+        assert delta.operations[0]["value"] == "updated"
+
+    def test_nested_path_roundtrip(self) -> None:
+        """Nested path identity produces deltas that round-trip."""
+        old = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "beta"},
+        ]}
+        new = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "003"}, "description": "gamma"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": "positionNumber.value",
+        })
+        result = apply_delta(deep_clone(old), delta)
+        assert result == new
+
+
 # ---------------------------------------------------------------------------
 # Regex-based array key routing
 # ---------------------------------------------------------------------------
