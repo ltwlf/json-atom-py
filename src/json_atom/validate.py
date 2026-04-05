@@ -13,7 +13,7 @@ from json_atom.models import ValidationResult
 _ENVELOPE_REQUIRED = {"format", "version", "operations"}
 
 # Known operation types
-_VALID_OPS = {"add", "remove", "replace"}
+_VALID_OPS = {"add", "remove", "replace", "move", "copy"}
 
 
 def validate_delta(delta: Any) -> ValidationResult:
@@ -69,7 +69,7 @@ def _validate_operation(op: Any, index: int, errors: list[str]) -> None:
     if "op" not in op:
         errors.append(f"{prefix}: missing required field 'op'")
     elif op["op"] not in _VALID_OPS:
-        errors.append(f"{prefix}: invalid op {op['op']!r}, must be one of: add, remove, replace")
+        errors.append(f"{prefix}: invalid op {op['op']!r}, must be one of: {', '.join(sorted(_VALID_OPS))}")
 
     # Required: path
     if "path" not in op:
@@ -95,3 +95,40 @@ def _validate_operation(op: Any, index: int, errors: list[str]) -> None:
         if "value" not in op:
             errors.append(f"{prefix}: 'replace' operation requires 'value'")
         # Note: oldValue is OPTIONAL on replace per spec
+
+    elif op_type == "move":
+        if "from" not in op:
+            errors.append(f"{prefix}: 'move' operation requires 'from'")
+        elif not isinstance(op["from"], str):
+            errors.append(f"{prefix}: 'from' must be a string")
+        if "value" in op:
+            errors.append(f"{prefix}: 'move' operation must not include 'value'")
+        if "oldValue" in op:
+            errors.append(f"{prefix}: 'move' operation must not include 'oldValue'")
+        # Self-move prevention
+        from_path = op.get("from")
+        to_path = op.get("path")
+        if isinstance(from_path, str) and isinstance(to_path, str):
+            if from_path == to_path:
+                errors.append(f"{prefix}: 'move' 'from' must differ from 'path'")
+            elif _is_path_prefix(from_path, to_path):
+                errors.append(f"{prefix}: 'move' cannot move a value into its own subtree")
+
+    elif op_type == "copy":
+        if "from" not in op:
+            errors.append(f"{prefix}: 'copy' operation requires 'from'")
+        elif not isinstance(op["from"], str):
+            errors.append(f"{prefix}: 'from' must be a string")
+        if "oldValue" in op:
+            errors.append(f"{prefix}: 'copy' operation must not include 'oldValue'")
+        # Note: value is OPTIONAL on copy (for reversibility)
+
+
+def _is_path_prefix(from_path: str, target_path: str) -> bool:
+    """Check if target_path is a descendant of from_path.
+
+    Root path ('$') is excluded — moving from root to a descendant is valid.
+    """
+    if from_path == "$":
+        return False
+    return target_path.startswith(from_path + ".") or target_path.startswith(from_path + "[")

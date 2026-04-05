@@ -209,10 +209,10 @@ class ComparisonNode:
 # ---------------------------------------------------------------------------
 
 # Fields defined by the spec — everything else is an extension (Section 11)
-_OP_SPEC_KEYS = frozenset({"op", "path", "value", "oldValue"})
+_OP_SPEC_KEYS = frozenset({"op", "path", "from", "value", "oldValue"})
 _DELTA_SPEC_KEYS = frozenset({"format", "version", "operations"})
 
-type OpType = Literal["add", "remove", "replace"]
+type OpType = Literal["add", "remove", "replace", "move", "copy"]
 
 
 class Operation(dict[str, Any]):
@@ -276,9 +276,44 @@ class Operation(dict[str, Any]):
             op["oldValue"] = old_value
         return op
 
+    _MISSING: Any = object()
+
+    @classmethod
+    def move(cls, from_path: str, path: str, **extensions: Any) -> Operation:
+        """Create a ``move`` operation.
+
+        Args:
+            from_path: Source JSON Atom path.
+            path: Target JSON Atom path.
+            **extensions: Extension properties (``x_*`` keys).
+        """
+        return cls(op="move", path=path, **{"from": from_path, **extensions})
+
+    @classmethod
+    def copy_op(cls, from_path: str, path: str, *, value: Any = _MISSING, **extensions: Any) -> Operation:
+        """Create a ``copy`` operation.
+
+        Named ``copy_op`` to avoid conflict with ``dict.copy()``.
+
+        Args:
+            from_path: Source JSON Atom path.
+            path: Target JSON Atom path.
+            value: The copied value (optional, for reversibility).
+            **extensions: Extension properties (``x_*`` keys).
+        """
+        op = cls(op="copy", path=path, **{"from": from_path, **extensions})
+        if value is not cls._MISSING:
+            op["value"] = value
+        return op
+
+    @property
+    def from_path(self) -> str | None:
+        """The source path for ``move`` and ``copy`` operations."""
+        return self.get("from")
+
     @property
     def op(self) -> OpType:
-        """The operation type: ``"add"``, ``"remove"``, or ``"replace"``."""
+        """The operation type."""
         return self["op"]  # type: ignore[no-any-return]
 
     @property
@@ -588,8 +623,10 @@ class Delta(dict[str, Any]):
 
     @property
     def is_reversible(self) -> bool:
-        """``True`` if all ``replace`` and ``remove`` operations include ``oldValue``."""
-        return all("oldValue" in op for op in self.operations if op.op in ("replace", "remove"))
+        """``True`` if all ``replace``/``remove`` include ``oldValue`` and all ``copy`` include ``value``."""
+        return all(
+            "oldValue" in op for op in self.operations if op.op in ("replace", "remove")
+        ) and all("value" in op for op in self.operations if op.op == "copy")
 
     @property
     def is_empty(self) -> bool:

@@ -50,6 +50,13 @@ def apply_delta(obj: Any, delta: Delta) -> Any:
 def _apply_operation(obj: Any, op: Operation) -> Any:
     """Apply a single operation and return the (possibly new) root object."""
     op_type = op["op"]
+
+    # Move/copy: two-path operations handled separately
+    if op_type == "move":
+        return _apply_move(obj, op)
+    if op_type == "copy":
+        return _apply_copy(obj, op)
+
     path_str = op["path"]
     segments = parse_path(path_str)
 
@@ -70,6 +77,73 @@ def _apply_operation(obj: Any, op: Operation) -> Any:
         _apply_value_filter_op(parent, final_seg, op_type, op, path_str, is_element_level=True)
     else:
         raise ApplyError(f"Unexpected segment type at end of path: {type(final_seg).__name__}")
+
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# Move / Copy operations (spec Section 6.6, 6.7)
+# ---------------------------------------------------------------------------
+
+
+def _read_value_at_path(obj: Any, path_str: str) -> Any:
+    """Resolve a JSON Atom path to its value in the document."""
+    segments = parse_path(path_str)
+    if not segments:
+        return obj  # root
+    current = obj
+    for seg in segments:
+        if isinstance(seg, PropertySegment):
+            if not isinstance(current, dict) or seg.name not in current:
+                raise ApplyError(f"Property '{seg.name}' not found: {path_str}")
+            current = current[seg.name]
+        elif isinstance(seg, IndexSegment):
+            if not isinstance(current, list) or seg.index >= len(current):
+                raise ApplyError(f"Index {seg.index} out of bounds: {path_str}")
+            current = current[seg.index]
+        elif isinstance(seg, KeyFilterSegment):
+            if not isinstance(current, list):
+                raise ApplyError(f"Cannot apply key filter on {type(current).__name__}: {path_str}")
+            idx = _find_key_filter_match(current, seg, path_str)
+            current = current[idx]
+        elif isinstance(seg, ValueFilterSegment):
+            if not isinstance(current, list):
+                raise ApplyError(f"Cannot apply value filter on {type(current).__name__}: {path_str}")
+            idx = _find_value_filter_match(current, seg, path_str)
+            current = current[idx]
+    return current
+
+
+def _apply_move(obj: Any, op: Operation) -> Any:
+    """Apply a move operation: read from source, remove, add at target."""
+    from_path = op["from"]
+    to_path = op["path"]
+
+    # Read value at source
+    value = _read_value_at_path(obj, from_path)
+
+    # Remove from source
+    remove_op = Operation(op="remove", path=from_path)
+    obj = _apply_operation(obj, remove_op)
+
+    # Add to target — no deepcopy needed, value was removed from source
+    add_op = Operation(op="add", path=to_path, value=value)
+    obj = _apply_operation(obj, add_op)
+
+    return obj
+
+
+def _apply_copy(obj: Any, op: Operation) -> Any:
+    """Apply a copy operation: read from source, deep-clone to target."""
+    from_path = op["from"]
+    to_path = op["path"]
+
+    # Read value at source — add operation handles deep-cloning
+    value = _read_value_at_path(obj, from_path)
+
+    # Add to target
+    add_op = Operation(op="add", path=to_path, value=value)
+    obj = _apply_operation(obj, add_op)
 
     return obj
 
