@@ -30,11 +30,13 @@ def invert_delta(delta: Delta) -> Delta:
 
     operations = delta["operations"]
 
-    # Check reversibility: all replace and remove ops must have oldValue
+    # Check reversibility: replace/remove need oldValue, copy needs value
     for i, op in enumerate(operations):
         op_type = op["op"]
         if op_type in ("replace", "remove") and "oldValue" not in op:
             raise InvertError(f"operations[{i}]: '{op_type}' operation missing 'oldValue' (required for inversion)")
+        if op_type == "copy" and "value" not in op:
+            raise InvertError(f"operations[{i}]: 'copy' operation missing 'value' (required for inversion)")
 
     # Build inverted operations in reverse order (spec Section 9.2)
     inverted_ops: list[Operation] = []
@@ -86,6 +88,16 @@ def _invert_operation(op: Operation) -> Operation:
         inverted["value"] = op["oldValue"]
         inverted["oldValue"] = op["value"]
 
+    elif op_type == "move":
+        # move(from, path) -> move(from=path, path=from)
+        inverted["from"] = op["path"]
+        inverted["path"] = op["from"]
+
+    elif op_type == "copy":
+        # copy(from, path, value) -> remove(path, oldValue=value)
+        inverted["op"] = "remove"
+        inverted["oldValue"] = op["value"]
+
     return Operation(inverted)
 
 
@@ -95,7 +107,9 @@ def _inverted_op_type(op_type: str) -> str:
         return "remove"
     if op_type == "remove":
         return "add"
-    return op_type  # replace stays replace
+    if op_type == "copy":
+        return "remove"
+    return op_type  # replace and move stay the same
 
 
 def revert_delta(obj: Any, delta: Delta) -> Any:
