@@ -105,9 +105,13 @@ def _read_value_at_path(obj: Any, path_str: str) -> Any:
                 raise ApplyError(f"Index {seg.index} out of bounds: {path_str}")
             current = current[seg.index]
         elif isinstance(seg, KeyFilterSegment):
+            if not isinstance(current, list):
+                raise ApplyError(f"Cannot apply key filter on {type(current).__name__}: {path_str}")
             idx = _find_key_filter_match(current, seg, path_str)
             current = current[idx]
         elif isinstance(seg, ValueFilterSegment):
+            if not isinstance(current, list):
+                raise ApplyError(f"Cannot apply value filter on {type(current).__name__}: {path_str}")
             idx = _find_value_filter_match(current, seg, path_str)
             current = current[idx]
     return current

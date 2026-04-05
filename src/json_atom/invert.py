@@ -18,7 +18,8 @@ def invert_delta(delta: Delta) -> Delta:
 
     The inverse delta, when applied to the target document, recovers the source.
 
-    Requires all ``replace`` and ``remove`` operations to have ``oldValue``.
+    Requires all ``replace`` and ``remove`` operations to have ``oldValue``,
+    and all ``copy`` operations to have ``value``.
     Preserves extension properties at both envelope and operation levels.
 
     Raises InvertError if the delta is not reversible or structurally invalid.
