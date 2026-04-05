@@ -44,8 +44,10 @@ class KeyFilterSegment:
     str, int, float, bool, or None.
 
     When ``literal_key`` is True, the property was parsed from bracket
-    notation (``@['key']``) and represents a literal property name —
-    build_path will always emit bracket notation to preserve semantics.
+    notation (``@['key']``) and represents a literal property name.
+    ``build_path`` emits bracket notation only when needed to preserve
+    semantics (i.e. when dot notation would change meaning); simple
+    identifiers are canonicalized to dot notation regardless.
     """
 
     property: str

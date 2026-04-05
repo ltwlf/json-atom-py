@@ -415,11 +415,13 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
 
     if len(matches) == 0:
         literal = format_filter_literal(seg.value)
-        raise PathError(f"Key filter [?(@.{seg.property}=={literal})] matched zero elements")
+        member = f".{seg.property}" if _NESTED_PATH_RE.match(seg.property) else f"['{seg.property}']"
+        raise PathError(f"Key filter [?(@{member}=={literal})] matched zero elements")
     if len(matches) > 1:
         literal = format_filter_literal(seg.value)
+        member = f".{seg.property}" if _NESTED_PATH_RE.match(seg.property) else f"['{seg.property}']"
         raise PathError(
-            f"Key filter [?(@.{seg.property}=={literal})] matched {len(matches)} elements (must be exactly one)"
+            f"Key filter [?(@{member}=={literal})] matched {len(matches)} elements (must be exactly one)"
         )
     return matches[0]
 
