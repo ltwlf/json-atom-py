@@ -29,11 +29,11 @@ class TestValidation:
         assert validate_delta(d).valid
 
     def test_valid_copy(self) -> None:
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         assert validate_delta(d).valid
 
     def test_valid_copy_with_value(self) -> None:
-        d = _delta(Operation.copy("$.a", "$.b", value=42))
+        d = _delta(Operation.copy_op("$.a", "$.b", value=42))
         assert validate_delta(d).valid
 
     def test_move_requires_from(self) -> None:
@@ -93,7 +93,7 @@ class TestValidation:
         d = _delta(
             Operation.replace("$.x", "new", old_value="old"),
             Operation.move("$.a", "$.b"),
-            Operation.copy("$.c", "$.d"),
+            Operation.copy_op("$.c", "$.d"),
             Operation.add("$.e", 1),
         )
         assert validate_delta(d).valid
@@ -170,20 +170,20 @@ class TestApplyMove:
 class TestApplyCopy:
     def test_copy_object_property(self) -> None:
         obj = {"a": 1}
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         result = apply_delta(obj, d)
         assert result == {"a": 1, "b": 1}
 
     def test_copy_preserves_source(self) -> None:
         obj = {"a": {"nested": 1}}
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         result = apply_delta(obj, d)
         assert result["a"] == {"nested": 1}
         assert result["b"] == {"nested": 1}
 
     def test_copy_deep_clones(self) -> None:
         obj = {"a": {"nested": [1, 2]}}
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         result = apply_delta(obj, d)
         # Mutate the copy — source should be unchanged
         result["b"]["nested"].append(3)
@@ -192,25 +192,25 @@ class TestApplyCopy:
 
     def test_copy_from_root(self) -> None:
         obj = {"x": 1}
-        d = _delta(Operation.copy("$", "$.snapshot"))
+        d = _delta(Operation.copy_op("$", "$.snapshot"))
         result = apply_delta(obj, d)
         assert result == {"x": 1, "snapshot": {"x": 1}}
 
     def test_copy_array_element(self) -> None:
         obj = {"arr": [10, 20], "other": []}
-        d = _delta(Operation.copy("$.arr[0]", "$.other[0]"))
+        d = _delta(Operation.copy_op("$.arr[0]", "$.other[0]"))
         result = apply_delta(obj, d)
         assert result == {"arr": [10, 20], "other": [10]}
 
     def test_copy_error_nonexistent_source(self) -> None:
         obj = {"a": 1}
-        d = _delta(Operation.copy("$.missing", "$.b"))
+        d = _delta(Operation.copy_op("$.missing", "$.b"))
         with pytest.raises(ApplyError):
             apply_delta(obj, d)
 
     def test_copy_error_existing_target(self) -> None:
         obj = {"a": 1, "b": 2}
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         with pytest.raises(ApplyError):
             apply_delta(obj, d)
 
@@ -237,7 +237,7 @@ class TestInversion:
         assert restored == obj
 
     def test_copy_inversion_produces_remove(self) -> None:
-        d = _delta(Operation.copy("$.a", "$.b", value=42))
+        d = _delta(Operation.copy_op("$.a", "$.b", value=42))
         inv = invert_delta(d)
         assert inv.operations[0]["op"] == "remove"
         assert inv.operations[0]["path"] == "$.b"
@@ -245,14 +245,14 @@ class TestInversion:
 
     def test_copy_round_trip(self) -> None:
         obj = {"a": 42}
-        d = _delta(Operation.copy("$.a", "$.b", value=42))
+        d = _delta(Operation.copy_op("$.a", "$.b", value=42))
         target = apply_delta(copy.deepcopy(obj), d)
         assert target == {"a": 42, "b": 42}
         restored = revert_delta(target, d)
         assert restored == obj
 
     def test_copy_without_value_raises(self) -> None:
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         with pytest.raises(InvertError, match="missing 'value'"):
             invert_delta(d)
 
@@ -264,7 +264,7 @@ class TestInversion:
     def test_multi_op_inversion_order(self) -> None:
         d = _delta(
             Operation.move("$.a", "$.b"),
-            Operation.copy("$.c", "$.d", value=1),
+            Operation.copy_op("$.c", "$.d", value=1),
         )
         inv = invert_delta(d)
         # Order reversed
@@ -292,7 +292,7 @@ class TestSequentialSemantics:
     def test_copy_then_modify_copy(self) -> None:
         obj = {"a": {"v": 1}}
         d = _delta(
-            Operation.copy("$.a", "$.b"),
+            Operation.copy_op("$.a", "$.b"),
             Operation.replace("$.b.v", 99, old_value=1),
         )
         result = apply_delta(obj, d)
@@ -310,7 +310,7 @@ class TestSequentialSemantics:
     def test_mixed_ops(self) -> None:
         obj = {"a": 1, "b": 2}
         d = _delta(
-            Operation.copy("$.a", "$.c"),
+            Operation.copy_op("$.a", "$.c"),
             Operation.move("$.b", "$.d"),
             Operation.add("$.e", 5),
         )
@@ -332,7 +332,7 @@ class TestEdgeCases:
 
     def test_copy_null_value(self) -> None:
         obj = {"a": None}
-        d = _delta(Operation.copy("$.a", "$.b"))
+        d = _delta(Operation.copy_op("$.a", "$.b"))
         result = apply_delta(obj, d)
         assert result == {"a": None, "b": None}
 
@@ -351,7 +351,7 @@ class TestEdgeCases:
     def test_copy_with_value_matches_actual(self) -> None:
         """The optional value field on copy should match what's actually copied."""
         obj = {"a": 42}
-        d = _delta(Operation.copy("$.a", "$.b", value=42))
+        d = _delta(Operation.copy_op("$.a", "$.b", value=42))
         result = apply_delta(obj, d)
         # Apply ignores value, reads from source
         assert result == {"a": 42, "b": 42}

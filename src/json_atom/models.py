@@ -290,8 +290,10 @@ class Operation(dict[str, Any]):
         return cls(op="move", path=path, **{"from": from_path, **extensions})
 
     @classmethod
-    def copy(cls, from_path: str, path: str, *, value: Any = _MISSING, **extensions: Any) -> Operation:
+    def copy_op(cls, from_path: str, path: str, *, value: Any = _MISSING, **extensions: Any) -> Operation:
         """Create a ``copy`` operation.
+
+        Named ``copy_op`` to avoid conflict with ``dict.copy()``.
 
         Args:
             from_path: Source JSON Atom path.
