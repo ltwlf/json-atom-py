@@ -187,7 +187,11 @@ def _find_key_filter_match(arr: list[Any], seg: KeyFilterSegment, path_str: str)
     """
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        if isinstance(elem, dict) and _has_property(elem, seg.property) and json_equal(_resolve_property(elem, seg.property), seg.value):
+        if (
+            isinstance(elem, dict)
+            and _has_property(elem, seg.property)
+            and json_equal(_resolve_property(elem, seg.property), seg.value)
+        ):
             matches.append(idx)
 
     if len(matches) == 0:
