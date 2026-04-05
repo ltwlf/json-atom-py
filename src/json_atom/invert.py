@@ -63,6 +63,8 @@ def _invert_operation(op: Operation) -> Operation:
       add(path, value)              -> remove(path, oldValue=value)
       remove(path, oldValue)        -> add(path, value=oldValue)
       replace(path, value, oldValue) -> replace(path, value=oldValue, oldValue=value)
+      move(from, path)              -> move(from=path, path=from)
+      copy(from, path, value)       -> remove(path, oldValue=value)
     """
     op_type = op["op"]
     inverted: dict[str, Any] = {}
