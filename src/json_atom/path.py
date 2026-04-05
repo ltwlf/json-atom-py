@@ -395,21 +395,22 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
 
     from json_atom._utils import json_equal
 
+    _sentinel = object()
+
     def _resolve(obj: Any, key: str) -> Any:
+        if seg.literal_key or "." not in key:
+            return obj.get(key, _sentinel) if isinstance(obj, dict) else _sentinel
         cur = obj
         for s in key.split("."):
             if not isinstance(cur, dict) or s not in cur:
-                return None
+                return _sentinel
             cur = cur[s]
         return cur
 
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        if (
-            isinstance(elem, dict)
-            and _resolve(elem, seg.property) is not None
-            and json_equal(_resolve(elem, seg.property), seg.value)
-        ):
+        resolved = _resolve(elem, seg.property)
+        if resolved is not _sentinel and json_equal(resolved, seg.value):
             matches.append(idx)
 
     if len(matches) == 0:
