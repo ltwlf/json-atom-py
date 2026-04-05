@@ -460,7 +460,7 @@ CANONICAL_PATHS = [
     "$.items[?(@.id==1)].name",
     "$.items[?(@.id==1)].address.city",
     "$.users[?(@.id==1)].contacts[0].email",
-    "$.items[?(@.dotted.key==42)]",
+    "$.items[?(@.positionNumber.value==42)]",
     "$.items[?(@['literal.key']==42)]",
 ]
 

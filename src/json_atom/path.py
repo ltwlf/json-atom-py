@@ -472,8 +472,8 @@ def build_path(
         elif isinstance(seg, KeyFilterSegment):
             prop = seg.property
             literal = format_filter_literal(seg.value)
-            if seg.literal_key:
-                # Literal property name (from bracket notation) — always bracket
+            if seg.literal_key and not _PROPERTY_NAME_RE.match(prop):
+                # Literal property name that can't use dot notation — bracket
                 escaped_prop = prop.replace("'", "''")
                 parts.append(f"[?(@['{escaped_prop}']=={literal})]")
             elif _NESTED_PATH_RE.match(prop):
