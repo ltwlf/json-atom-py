@@ -24,6 +24,10 @@ from json_atom.models import (
 # property-name = (ALPHA / "_") *(ALPHA / DIGIT / "_")
 _PROPERTY_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
+# Regex for nested dot-notation paths: each segment is a valid property name.
+# Supports nested member-access in filters per RFC 9535 (e.g. @.a.b==val).
+_NESTED_PATH_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
+
 # Regex for JSON number literals (spec Section 5.1 / Appendix C):
 # number-literal = ["-"] ("0" / DIGIT1 *DIGIT) ["." 1*DIGIT] [("e" / "E") ["+" / "-"] 1*DIGIT]
 _NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
@@ -150,12 +154,12 @@ def _parse_filter(inner: str) -> KeyFilterSegment | ValueFilterSegment:
     `inner` is the text between '@' and ')' (exclusive).
     """
     if inner.startswith("."):
-        # Key filter with dot property: .key==val
+        # Key filter with dot property: .key==val or .a.b==val (nested per RFC 9535)
         eq_pos = inner.find("==")
         if eq_pos == -1:
             raise PathError(f"Invalid filter expression: missing '==' in @{inner}")
         key = inner[1:eq_pos]
-        if not key or not _PROPERTY_NAME_RE.match(key):
+        if not key or not _NESTED_PATH_RE.match(key):
             raise PathError(f"Invalid property name in filter: {key!r}")
         literal_str = inner[eq_pos + 2 :]
         return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str))
@@ -455,7 +459,8 @@ def build_path(
         elif isinstance(seg, KeyFilterSegment):
             prop = seg.property
             literal = format_filter_literal(seg.value)
-            if _PROPERTY_NAME_RE.match(prop):
+            if _NESTED_PATH_RE.match(prop):
+                # Simple identifier or nested path — dot notation
                 parts.append(f"[?(@.{prop}=={literal})]")
             else:
                 escaped_prop = prop.replace("'", "''")
