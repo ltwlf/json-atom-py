@@ -395,9 +395,17 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
 
     from json_atom._utils import json_equal
 
+    def _resolve(obj: Any, key: str) -> Any:
+        cur = obj
+        for s in key.split("."):
+            if not isinstance(cur, dict) or s not in cur:
+                return None
+            cur = cur[s]
+        return cur
+
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        if isinstance(elem, dict) and seg.property in elem and json_equal(elem[seg.property], seg.value):
+        if isinstance(elem, dict) and _resolve(elem, seg.property) is not None and json_equal(_resolve(elem, seg.property), seg.value):
             matches.append(idx)
 
     if len(matches) == 0:

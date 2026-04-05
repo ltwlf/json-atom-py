@@ -155,14 +155,39 @@ def _resolve_parent(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_property(obj: Any, key: str) -> Any:
+    """Resolve a potentially nested property path (e.g. 'a.b.c') on a dict."""
+    if "." not in key:
+        return obj.get(key) if isinstance(obj, dict) else None
+    current = obj
+    for seg in key.split("."):
+        if not isinstance(current, dict) or seg not in current:
+            return None
+        current = current[seg]
+    return current
+
+
+def _has_property(obj: dict[str, Any], key: str) -> bool:
+    """Check if a potentially nested property path exists."""
+    if "." not in key:
+        return key in obj
+    current: Any = obj
+    for seg in key.split("."):
+        if not isinstance(current, dict) or seg not in current:
+            return False
+        current = current[seg]
+    return True
+
+
 def _find_key_filter_match(arr: list[Any], seg: KeyFilterSegment, path_str: str) -> int:
     """Find exactly one element matching a key filter. Returns its index.
 
+    Supports nested property paths (e.g. 'positionNumber.value').
     Raises ApplyError if zero or multiple elements match.
     """
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        if isinstance(elem, dict) and seg.property in elem and json_equal(elem[seg.property], seg.value):
+        if isinstance(elem, dict) and _has_property(elem, seg.property) and json_equal(_resolve_property(elem, seg.property), seg.value):
             matches.append(idx)
 
     if len(matches) == 0:

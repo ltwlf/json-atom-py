@@ -416,8 +416,8 @@ class TestBuildPath:
 
     def test_key_filter_nested_path(self) -> None:
         """Key filter with nested path uses dot notation per RFC 9535."""
-        segments = [PropertySegment("items"), KeyFilterSegment("dotted.key", 42)]
-        assert build_path(segments) == "$.items[?(@.dotted.key==42)]"
+        segments = [PropertySegment("items"), KeyFilterSegment("positionNumber.value", 42)]
+        assert build_path(segments) == "$.items[?(@.positionNumber.value==42)]"
 
     def test_key_filter_bracket_property(self) -> None:
         """Key filter with non-identifier property uses bracket notation."""
