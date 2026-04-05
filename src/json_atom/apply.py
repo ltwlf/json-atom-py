@@ -16,7 +16,6 @@ from json_atom.models import (
     KeyFilterSegment,
     Operation,
     PropertySegment,
-    RootSegment,
     ValueFilterSegment,
 )
 from json_atom.path import parse_path
@@ -94,9 +93,7 @@ def _read_value_at_path(obj: Any, path_str: str) -> Any:
         return obj  # root
     current = obj
     for seg in segments:
-        if isinstance(seg, RootSegment):
-            continue
-        elif isinstance(seg, PropertySegment):
+        if isinstance(seg, PropertySegment):
             if not isinstance(current, dict) or seg.name not in current:
                 raise ApplyError(f"Property '{seg.name}' not found: {path_str}")
             current = current[seg.name]
@@ -141,8 +138,8 @@ def _apply_copy(obj: Any, op: Operation) -> Any:
     from_path = op["from"]
     to_path = op["path"]
 
-    # Read and deep-clone value at source
-    value = copy.deepcopy(_read_value_at_path(obj, from_path))
+    # Read value at source — add operation handles deep-cloning
+    value = _read_value_at_path(obj, from_path)
 
     # Add to target
     add_op = Operation(op="add", path=to_path, value=value)
