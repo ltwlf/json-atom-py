@@ -38,14 +38,21 @@ class IndexSegment:
 
 @dataclass(frozen=True, slots=True)
 class KeyFilterSegment:
-    """A key filter segment: [?(@.key==value)].
+    """A key filter segment: [?(@.key==value)] or [?(@['key']==value)].
 
     The value field holds the filter literal as a typed Python value:
     str, int, float, bool, or None.
+
+    When ``literal_key`` is True, the property was parsed from bracket
+    notation (``@['key']``) and represents a literal property name.
+    ``build_path`` emits bracket notation only when needed to preserve
+    semantics (i.e. when dot notation would change meaning); simple
+    identifiers are canonicalized to dot notation regardless.
     """
 
     property: str
     value: Any
+    literal_key: bool = False
 
 
 @dataclass(frozen=True, slots=True)

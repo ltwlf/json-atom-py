@@ -24,6 +24,10 @@ from json_atom.models import (
 # property-name = (ALPHA / "_") *(ALPHA / DIGIT / "_")
 _PROPERTY_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
+# Regex for nested dot-notation paths: each segment is a valid property name.
+# Supports nested member-access in filters per RFC 9535 (e.g. @.a.b==val).
+_NESTED_PATH_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
+
 # Regex for JSON number literals (spec Section 5.1 / Appendix C):
 # number-literal = ["-"] ("0" / DIGIT1 *DIGIT) ["." 1*DIGIT] [("e" / "E") ["+" / "-"] 1*DIGIT]
 _NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
@@ -150,12 +154,12 @@ def _parse_filter(inner: str) -> KeyFilterSegment | ValueFilterSegment:
     `inner` is the text between '@' and ')' (exclusive).
     """
     if inner.startswith("."):
-        # Key filter with dot property: .key==val
+        # Key filter with dot property: .key==val or .a.b==val (nested per RFC 9535)
         eq_pos = inner.find("==")
         if eq_pos == -1:
             raise PathError(f"Invalid filter expression: missing '==' in @{inner}")
         key = inner[1:eq_pos]
-        if not key or not _PROPERTY_NAME_RE.match(key):
+        if not key or not _NESTED_PATH_RE.match(key):
             raise PathError(f"Invalid property name in filter: {key!r}")
         literal_str = inner[eq_pos + 2 :]
         return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str))
@@ -168,7 +172,7 @@ def _parse_filter(inner: str) -> KeyFilterSegment | ValueFilterSegment:
         if not rest.startswith("]=="):
             raise PathError("Invalid bracket filter syntax: expected ']==' after quoted key")
         literal_str = rest[3:]  # skip ']==
-        return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str))
+        return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str), literal_key=True)
 
     if inner.startswith("=="):
         # Value filter: ==val
@@ -391,18 +395,33 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
 
     from json_atom._utils import json_equal
 
+    _sentinel = object()
+
+    def _resolve(obj: Any, key: str) -> Any:
+        if seg.literal_key or "." not in key:
+            return obj.get(key, _sentinel) if isinstance(obj, dict) else _sentinel
+        cur = obj
+        for s in key.split("."):
+            if not isinstance(cur, dict) or s not in cur:
+                return _sentinel
+            cur = cur[s]
+        return cur
+
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        if isinstance(elem, dict) and seg.property in elem and json_equal(elem[seg.property], seg.value):
+        resolved = _resolve(elem, seg.property)
+        if resolved is not _sentinel and json_equal(resolved, seg.value):
             matches.append(idx)
 
     if len(matches) == 0:
         literal = format_filter_literal(seg.value)
-        raise PathError(f"Key filter [?(@.{seg.property}=={literal})] matched zero elements")
+        member = f".{seg.property}" if _NESTED_PATH_RE.match(seg.property) else f"['{seg.property}']"
+        raise PathError(f"Key filter [?(@{member}=={literal})] matched zero elements")
     if len(matches) > 1:
         literal = format_filter_literal(seg.value)
+        member = f".{seg.property}" if _NESTED_PATH_RE.match(seg.property) else f"['{seg.property}']"
         raise PathError(
-            f"Key filter [?(@.{seg.property}=={literal})] matched {len(matches)} elements (must be exactly one)"
+            f"Key filter [?(@{member}=={literal})] matched {len(matches)} elements (must be exactly one)"
         )
     return matches[0]
 
@@ -455,7 +474,12 @@ def build_path(
         elif isinstance(seg, KeyFilterSegment):
             prop = seg.property
             literal = format_filter_literal(seg.value)
-            if _PROPERTY_NAME_RE.match(prop):
+            if seg.literal_key and not _PROPERTY_NAME_RE.match(prop):
+                # Literal property name that can't use dot notation — bracket
+                escaped_prop = prop.replace("'", "''")
+                parts.append(f"[?(@['{escaped_prop}']=={literal})]")
+            elif _NESTED_PATH_RE.match(prop):
+                # Simple identifier or nested path — dot notation
                 parts.append(f"[?(@.{prop}=={literal})]")
             else:
                 escaped_prop = prop.replace("'", "''")

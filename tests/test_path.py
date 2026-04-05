@@ -236,7 +236,7 @@ class TestParsePath:
     def test_key_filter_with_bracket_property(self) -> None:
         """$[?(@['dotted.key']==42)] — bracket property in filter."""
         segments = parse_path("$.items[?(@['dotted.key']==42)]")
-        assert segments == [PropertySegment("items"), KeyFilterSegment("dotted.key", 42)]
+        assert segments == [PropertySegment("items"), KeyFilterSegment("dotted.key", 42, literal_key=True)]
 
     def test_value_filter_with_string(self) -> None:
         segments = parse_path("$.tags[?(@=='urgent')]")
@@ -414,10 +414,15 @@ class TestBuildPath:
         segments = [PropertySegment("items"), KeyFilterSegment("status", None)]
         assert build_path(segments) == "$.items[?(@.status==null)]"
 
+    def test_key_filter_nested_path(self) -> None:
+        """Key filter with nested path uses dot notation per RFC 9535."""
+        segments = [PropertySegment("items"), KeyFilterSegment("positionNumber.value", 42)]
+        assert build_path(segments) == "$.items[?(@.positionNumber.value==42)]"
+
     def test_key_filter_bracket_property(self) -> None:
-        """Key filter with dotted property name uses bracket notation."""
-        segments = [PropertySegment("items"), KeyFilterSegment("dotted.key", 42)]
-        assert build_path(segments) == "$.items[?(@['dotted.key']==42)]"
+        """Key filter with non-identifier property uses bracket notation."""
+        segments = [PropertySegment("items"), KeyFilterSegment("a-b", 42)]
+        assert build_path(segments) == "$.items[?(@['a-b']==42)]"
 
     def test_value_filter_string(self) -> None:
         segments = [PropertySegment("tags"), ValueFilterSegment("urgent")]
@@ -455,7 +460,8 @@ CANONICAL_PATHS = [
     "$.items[?(@.id==1)].name",
     "$.items[?(@.id==1)].address.city",
     "$.users[?(@.id==1)].contacts[0].email",
-    "$.items[?(@['dotted.key']==42)]",
+    "$.items[?(@.positionNumber.value==42)]",
+    "$.items[?(@['literal.key']==42)]",
 ]
 
 
