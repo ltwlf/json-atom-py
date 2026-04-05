@@ -125,5 +125,10 @@ def _validate_operation(op: Any, index: int, errors: list[str]) -> None:
 
 
 def _is_path_prefix(from_path: str, target_path: str) -> bool:
-    """Check if target_path is a descendant of from_path."""
+    """Check if target_path is a descendant of from_path.
+
+    Root path ('$') is excluded — moving from root to a descendant is valid.
+    """
+    if from_path == "$":
+        return False
     return target_path.startswith(from_path + ".") or target_path.startswith(from_path + "[")

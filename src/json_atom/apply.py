@@ -125,8 +125,8 @@ def _apply_move(obj: Any, op: Operation) -> Any:
     remove_op = Operation(op="remove", path=from_path)
     obj = _apply_operation(obj, remove_op)
 
-    # Add to target (no deepcopy needed — value was removed, not shared)
-    add_op = Operation(op="add", path=to_path, value=copy.deepcopy(value))
+    # Add to target — no deepcopy needed, value was removed from source
+    add_op = Operation(op="add", path=to_path, value=value)
     obj = _apply_operation(obj, add_op)
 
     return obj
