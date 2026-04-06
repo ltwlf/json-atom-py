@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from json_atom._utils import json_equal
 from json_atom.errors import DiffError
+from json_atom.path import _NESTED_PATH_RE
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,19 +24,27 @@ class IdentityResolver:
     The ``property`` name appears in filter paths: ``[?(@.{property}==...)]``.
     The ``resolve`` callable extracts the identity value from an element.
 
+    Supports nested dot paths like ``positionNumber.value`` which resolves
+    via ``elem["positionNumber"]["value"]``.  When a custom resolver is
+    provided, the stored value is validated using the same dot-path
+    semantics for ``property``.
+
     .. important::
 
         The value returned by ``resolve`` **must** match the value actually
-        stored under ``elem[property]`` for that element.  JSON Atom applies
-        keyed-array filters by testing ``elem[property] == literal``, so if
-        the resolver returns a synthetic or composite value that is not
-        literally stored on the element, the generated delta paths will not
-        match during ``apply_delta`` / ``resolve_path``.
+        stored at the ``property`` path on the element.  JSON Atom applies
+        keyed-array filters by resolving the property path, so if the
+        resolver returns a value that doesn't match the stored value, the
+        generated delta paths will not match during ``apply_delta``.
 
     Example::
 
         # Simple key: use the ``id`` field directly
         IdentityResolver("id", lambda e: e["id"])
+
+        # Nested key: use a dot-separated path
+        IdentityResolver("positionNumber.value",
+                         lambda e: e["positionNumber"]["value"])
 
         # Validation: coerce to int, ensuring consistency
         # (only safe when the stored value round-trips through int)
@@ -125,6 +134,28 @@ def _normalize_identity_value(value: IdentityKey) -> _ResolvedIdentity:
     )
 
 
+_SENTINEL = object()
+
+
+def _resolve_nested(elem: Any, key_property: str) -> Any:
+    """Resolve a possibly-nested dot path on a dict element.
+
+    Returns ``_SENTINEL`` if any segment is missing.
+    For non-nested keys, falls back to a simple dict lookup.
+    """
+    if not isinstance(elem, dict):
+        return _SENTINEL
+    is_nested = "." in key_property and _NESTED_PATH_RE.match(key_property) is not None
+    if not is_nested:
+        return elem.get(key_property, _SENTINEL)
+    current: Any = elem
+    for seg in key_property.split("."):
+        if not isinstance(current, dict) or seg not in current:
+            return _SENTINEL
+        current = current[seg]
+    return current
+
+
 def extract_identity(
     elem: Any,
     key_property: str,
@@ -133,8 +164,11 @@ def extract_identity(
     """Extract the identity value from an array element.
 
     Uses the custom resolver if provided, otherwise reads the key property
-    directly from the element dict.  The returned value must be a JSON scalar
-    (str, int, float, bool, or None) suitable for use in filter paths.
+    directly from the element dict.  Supports nested dot paths like
+    ``positionNumber.value`` → ``elem["positionNumber"]["value"]``.
+
+    The returned value must be a JSON scalar (str, int, float, bool, or None)
+    suitable for use in filter paths.
 
     Raises:
         DiffError: If the element is missing the key property or the resolver
@@ -147,25 +181,25 @@ def extract_identity(
             raise DiffError(
                 f"Identity resolver for '{key_property}' failed on element {elem!r}: {exc}"
             ) from exc
-        # Verify the element is a dict with the key property and that the
-        # stored value matches the resolved value — apply_delta matches
-        # filter paths via elem[key_property] == literal, so a mismatch
-        # would produce unapplyable deltas.
-        if not isinstance(elem, dict) or key_property not in elem:
+        # Verify the element has the key property and that the stored value
+        # matches the resolved value — apply_delta matches filter paths via
+        # the key property, so a mismatch would produce unapplyable deltas.
+        stored = _resolve_nested(elem, key_property)
+        if stored is _SENTINEL:
             raise DiffError(
                 f"Resolver for '{key_property}' returned {value!r} but element "
-                f"is not a dict with '{key_property}': {elem!r}"
+                f"is missing identity path '{key_property}': {elem!r}"
             )
-        stored = elem[key_property]
         if not json_equal(stored, value):
             raise DiffError(
                 f"Resolver for '{key_property}' returned {value!r} but "
-                f"elem['{key_property}'] is {stored!r} — filter path would not match"
+                f"stored value at '{key_property}' is {stored!r} — filter path would not match"
             )
-    elif not isinstance(elem, dict) or key_property not in elem:
-        raise DiffError(f"Array element missing identity key '{key_property}': {elem!r}")
     else:
-        value = elem[key_property]
+        stored = _resolve_nested(elem, key_property)
+        if stored is _SENTINEL:
+            raise DiffError(f"Array element missing identity key '{key_property}': {elem!r}")
+        value = stored
 
     if not isinstance(value, (str, int, float, bool, type(None))):
         raise DiffError(
