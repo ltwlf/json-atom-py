@@ -24,19 +24,27 @@ class IdentityResolver:
     The ``property`` name appears in filter paths: ``[?(@.{property}==...)]``.
     The ``resolve`` callable extracts the identity value from an element.
 
+    Supports nested dot paths like ``positionNumber.value`` which resolves
+    via ``elem["positionNumber"]["value"]``.  When a custom resolver is
+    provided, the stored value is validated using the same dot-path
+    semantics for ``property``.
+
     .. important::
 
         The value returned by ``resolve`` **must** match the value actually
-        stored under ``elem[property]`` for that element.  JSON Atom applies
-        keyed-array filters by testing ``elem[property] == literal``, so if
-        the resolver returns a synthetic or composite value that is not
-        literally stored on the element, the generated delta paths will not
-        match during ``apply_delta`` / ``resolve_path``.
+        stored at the ``property`` path on the element.  JSON Atom applies
+        keyed-array filters by resolving the property path, so if the
+        resolver returns a value that doesn't match the stored value, the
+        generated delta paths will not match during ``apply_delta``.
 
     Example::
 
         # Simple key: use the ``id`` field directly
         IdentityResolver("id", lambda e: e["id"])
+
+        # Nested key: use a dot-separated path
+        IdentityResolver("positionNumber.value",
+                         lambda e: e["positionNumber"]["value"])
 
         # Validation: coerce to int, ensuring consistency
         # (only safe when the stored value round-trips through int)
