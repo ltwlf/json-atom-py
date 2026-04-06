@@ -14,9 +14,7 @@ from typing import Any, Literal
 
 from json_atom._utils import json_equal
 from json_atom.errors import DiffError
-
-# Nested dot-notation paths: each segment is a valid identifier.
-_NESTED_PATH_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
+from json_atom.path import _NESTED_PATH_RE
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,12 +180,12 @@ def extract_identity(
         if stored is _SENTINEL:
             raise DiffError(
                 f"Resolver for '{key_property}' returned {value!r} but element "
-                f"is not a dict with '{key_property}': {elem!r}"
+                f"is missing identity path '{key_property}': {elem!r}"
             )
         if not json_equal(stored, value):
             raise DiffError(
                 f"Resolver for '{key_property}' returned {value!r} but "
-                f"elem['{key_property}'] is {stored!r} — filter path would not match"
+                f"stored value at '{key_property}' is {stored!r} — filter path would not match"
             )
     else:
         stored = _resolve_nested(elem, key_property)
