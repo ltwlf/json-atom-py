@@ -670,6 +670,99 @@ class TestNestedPathIdentityKeys:
         result = apply_delta(deep_clone(old), delta)
         assert result == new
 
+    def test_nested_path_invert_roundtrip(self) -> None:
+        """Invert + apply round-trip with nested identity paths."""
+        old = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "beta"},
+        ]}
+        new = {"items": [
+            {"positionNumber": {"value": "001"}, "description": "alpha"},
+            {"positionNumber": {"value": "002"}, "description": "updated"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": "positionNumber.value",
+        })
+        applied = apply_delta(deep_clone(old), delta)
+        assert applied == new
+        inverted = invert_delta(delta)
+        reverted = apply_delta(deep_clone(applied), inverted)
+        assert reverted == old
+
+    def test_nested_path_3_levels(self) -> None:
+        """3-level nested identity path (a.b.c)."""
+        old = {"items": [
+            {"meta": {"org": {"id": "X"}}, "val": 10},
+            {"meta": {"org": {"id": "Y"}}, "val": 20},
+        ]}
+        new = {"items": [
+            {"meta": {"org": {"id": "X"}}, "val": 10},
+            {"meta": {"org": {"id": "Y"}}, "val": 30},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": IdentityResolver("meta.org.id", lambda e: e["meta"]["org"]["id"]),
+        })
+        assert len(delta.operations) == 1
+        assert delta.operations[0].path == "$.items[?(@.meta.org.id=='Y')].val"
+        result = apply_delta(deep_clone(old), delta)
+        assert result == new
+        reverted = apply_delta(deep_clone(result), invert_delta(delta))
+        assert reverted == old
+
+    def test_nested_path_numeric_value(self) -> None:
+        """Nested identity path with numeric value."""
+        old = {"items": [
+            {"code": {"num": 1}, "name": "Widget"},
+            {"code": {"num": 2}, "name": "Gadget"},
+        ]}
+        new = {"items": [
+            {"code": {"num": 1}, "name": "Widget"},
+            {"code": {"num": 2}, "name": "Updated"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": IdentityResolver("code.num", lambda e: e["code"]["num"]),
+        })
+        assert len(delta.operations) == 1
+        assert delta.operations[0].path == "$.items[?(@.code.num==2)].name"
+        result = apply_delta(deep_clone(old), delta)
+        assert result == new
+
+    def test_nested_path_boolean_value(self) -> None:
+        """Nested identity path with boolean value."""
+        old = {"items": [
+            {"config": {"active": True}, "label": "on"},
+            {"config": {"active": False}, "label": "off"},
+        ]}
+        new = {"items": [
+            {"config": {"active": True}, "label": "on"},
+            {"config": {"active": False}, "label": "disabled"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": IdentityResolver("config.active", lambda e: e["config"]["active"]),
+        })
+        assert len(delta.operations) == 1
+        assert delta.operations[0].path == "$.items[?(@.config.active==false)].label"
+        result = apply_delta(deep_clone(old), delta)
+        assert result == new
+
+    def test_nested_path_null_value(self) -> None:
+        """Nested identity path with null value."""
+        old = {"items": [
+            {"status": {"code": None}, "label": "pending"},
+            {"status": {"code": "OK"}, "label": "done"},
+        ]}
+        new = {"items": [
+            {"status": {"code": None}, "label": "waiting"},
+            {"status": {"code": "OK"}, "label": "done"},
+        ]}
+        delta = diff_delta(old, new, array_identity_keys={
+            "items": IdentityResolver("status.code", lambda e: e["status"]["code"]),
+        })
+        assert len(delta.operations) == 1
+        assert delta.operations[0].path == "$.items[?(@.status.code==null)].label"
+        result = apply_delta(deep_clone(old), delta)
+        assert result == new
+
 
 # ---------------------------------------------------------------------------
 # Regex-based array key routing
