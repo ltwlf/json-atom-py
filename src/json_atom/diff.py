@@ -107,6 +107,14 @@ def _diff_values(
     if json_equal(old, new):
         return
 
+    # At document root, null represents absence (spec Section 6.5).
+    if not segments and old is None:
+        _emit_add(new, segments, operations)
+        return
+    if not segments and new is None:
+        _emit_remove(old, segments, reversible, operations)
+        return
+
     old_is_dict = isinstance(old, dict) and not isinstance(old, bool)
     new_is_dict = isinstance(new, dict) and not isinstance(new, bool)
 

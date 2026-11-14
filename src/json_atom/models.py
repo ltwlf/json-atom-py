@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -53,6 +54,14 @@ class KeyFilterSegment:
     property: str
     value: Any
     literal_key: bool = False
+    member_path: tuple[str, ...] | None = None
+
+    @builtins.property
+    def members(self) -> tuple[str, ...]:
+        """Unambiguous property names, including mixed bracket/dot access."""
+        if self.member_path is not None:
+            return self.member_path
+        return (self.property,) if self.literal_key else tuple(self.property.split("."))
 
 
 @dataclass(frozen=True, slots=True)

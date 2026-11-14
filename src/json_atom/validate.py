@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from json_atom.errors import PathError
 from json_atom.models import ValidationResult
+from json_atom.path import build_path, parse_path
 
 # Fields defined by the spec for the delta envelope
 _ENVELOPE_REQUIRED = {"format", "version", "operations"}
@@ -44,6 +46,9 @@ def validate_delta(delta: Any) -> ValidationResult:
     elif not isinstance(delta["version"], int) or isinstance(delta["version"], bool):
         errors.append(f"Invalid version: expected integer, got {type(delta['version']).__name__}")
 
+    elif delta["version"] != 1:
+        errors.append(f"Unsupported version: {delta['version']!r}; expected 1")
+
     # Required field: operations
     if "operations" not in delta:
         errors.append("Missing required field: 'operations'")
@@ -68,7 +73,7 @@ def _validate_operation(op: Any, index: int, errors: list[str]) -> None:
     # Required: op
     if "op" not in op:
         errors.append(f"{prefix}: missing required field 'op'")
-    elif op["op"] not in _VALID_OPS:
+    elif not isinstance(op["op"], str) or op["op"] not in _VALID_OPS:
         errors.append(f"{prefix}: invalid op {op['op']!r}, must be one of: {', '.join(sorted(_VALID_OPS))}")
 
     # Required: path
@@ -109,7 +114,7 @@ def _validate_operation(op: Any, index: int, errors: list[str]) -> None:
         from_path = op.get("from")
         to_path = op.get("path")
         if isinstance(from_path, str) and isinstance(to_path, str):
-            if from_path == to_path:
+            if _same_path(from_path, to_path):
                 errors.append(f"{prefix}: 'move' 'from' must differ from 'path'")
             elif _is_path_prefix(from_path, to_path):
                 errors.append(f"{prefix}: 'move' cannot move a value into its own subtree")
@@ -124,11 +129,18 @@ def _validate_operation(op: Any, index: int, errors: list[str]) -> None:
         # Note: value is OPTIONAL on copy (for reversibility)
 
 
-def _is_path_prefix(from_path: str, target_path: str) -> bool:
-    """Check if target_path is a descendant of from_path.
+def _same_path(left: str, right: str) -> bool:
+    try:
+        return build_path(parse_path(left)) == build_path(parse_path(right))
+    except (PathError, ValueError):
+        return left == right
 
-    Root path ('$') is excluded — moving from root to a descendant is valid.
-    """
-    if from_path == "$":
+
+def _is_path_prefix(from_path: str, target_path: str) -> bool:
+    """Compare canonical paths so bracket aliases and root obey subtree rules."""
+    try:
+        source = build_path(parse_path(from_path))
+        target = build_path(parse_path(target_path))
+    except (PathError, ValueError):
         return False
-    return target_path.startswith(from_path + ".") or target_path.startswith(from_path + "[")
+    return target.startswith(source + ".") or target.startswith(source + "[")
