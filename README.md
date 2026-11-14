@@ -21,6 +21,18 @@ json-atom-format  (specification)
 
 The specification defines the wire format. Each language implementation produces and consumes compatible deltas. A TypeScript implementation is also available: [json-diff-ts](https://github.com/ltwlf/json-diff-ts).
 
+## Release 0.4.2
+
+This release aligns edge cases with the TypeScript implementation and the shared JSON Atom fixtures:
+
+- Mixed dot/bracket identity paths preserve literal property names.
+- Nested boolean/number changes are detected using JSON type equality.
+- Root creation/deletion uses `add`/`remove` with `null` as the empty document.
+- Failed moves preserve their source, and equivalent bracket paths cannot bypass move restrictions.
+- Unsupported wire versions are rejected.
+
+Validated with 824 Python tests, all 16 shared conformance fixtures, and 205 document pairs exchanged in both directions with TypeScript, including undo.
+
 ## Installation
 
 ```bash
