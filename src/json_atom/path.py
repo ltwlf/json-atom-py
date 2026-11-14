@@ -153,26 +153,32 @@ def _parse_filter(inner: str) -> KeyFilterSegment | ValueFilterSegment:
 
     `inner` is the text between '@' and ')' (exclusive).
     """
-    if inner.startswith("."):
-        # Key filter with dot property: .key==val or .a.b==val (nested per RFC 9535)
-        eq_pos = inner.find("==")
-        if eq_pos == -1:
-            raise PathError(f"Invalid filter expression: missing '==' in @{inner}")
-        key = inner[1:eq_pos]
-        if not key or not _NESTED_PATH_RE.match(key):
-            raise PathError(f"Invalid property name in filter: {key!r}")
-        literal_str = inner[eq_pos + 2 :]
-        return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str))
-
-    if inner.startswith("['"):
-        # Key filter with bracket property: ['dotted.key']==val
-        key, close_quote_idx = _extract_quoted_string(inner, 2)  # after ['
-        # After the closing quote, expect ']==' then the literal
-        rest = inner[close_quote_idx + 1 :]  # from ']' onwards
-        if not rest.startswith("]=="):
-            raise PathError("Invalid bracket filter syntax: expected ']==' after quoted key")
-        literal_str = rest[3:]  # skip ']==
-        return KeyFilterSegment(property=key, value=parse_filter_literal(literal_str), literal_key=True)
+    if inner.startswith((".", "['")):
+        members: list[str] = []
+        i = 0
+        while i < len(inner) and not inner.startswith("==", i):
+            if inner[i] == ".":
+                match = re.match(r"[a-zA-Z_][a-zA-Z0-9_]*", inner[i + 1 :])
+                if match is None:
+                    raise PathError("Invalid property name in filter")
+                members.append(match.group())
+                i += 1 + len(match.group())
+            elif inner.startswith("['", i):
+                key, close = _extract_quoted_string(inner, i + 2)
+                if inner[close + 1 : close + 2] != "]":
+                    raise PathError("Expected ']' after filter property")
+                members.append(key)
+                i = close + 2
+            else:
+                raise PathError("Invalid member access in filter")
+        if not inner.startswith("==", i):
+            raise PathError("Invalid filter expression: missing '=='")
+        value = parse_filter_literal(inner[i + 2 :])
+        if len(members) == 1:
+            return KeyFilterSegment(property=members[0], value=value, literal_key=inner.startswith("['"))
+        if all(_PROPERTY_NAME_RE.fullmatch(member) for member in members):
+            return KeyFilterSegment(property=".".join(members), value=value)
+        return KeyFilterSegment(property=".".join(members), value=value, member_path=tuple(members))
 
     if inner.startswith("=="):
         # Value filter: ==val
@@ -397,19 +403,17 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
 
     _sentinel = object()
 
-    def _resolve(obj: Any, key: str) -> Any:
-        if seg.literal_key or "." not in key:
-            return obj.get(key, _sentinel) if isinstance(obj, dict) else _sentinel
+    def _resolve(obj: Any) -> Any:
         cur = obj
-        for s in key.split("."):
-            if not isinstance(cur, dict) or s not in cur:
+        for member in seg.members:
+            if not isinstance(cur, dict) or member not in cur:
                 return _sentinel
-            cur = cur[s]
+            cur = cur[member]
         return cur
 
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        resolved = _resolve(elem, seg.property)
+        resolved = _resolve(elem)
         if resolved is not _sentinel and json_equal(resolved, seg.value):
             matches.append(idx)
 
@@ -420,9 +424,7 @@ def _resolve_key_filter(arr: Any, seg: KeyFilterSegment) -> int:
     if len(matches) > 1:
         literal = format_filter_literal(seg.value)
         member = f".{seg.property}" if _NESTED_PATH_RE.match(seg.property) else f"['{seg.property}']"
-        raise PathError(
-            f"Key filter [?(@{member}=={literal})] matched {len(matches)} elements (must be exactly one)"
-        )
+        raise PathError(f"Key filter [?(@{member}=={literal})] matched {len(matches)} elements (must be exactly one)")
     return matches[0]
 
 
@@ -474,7 +476,13 @@ def build_path(
         elif isinstance(seg, KeyFilterSegment):
             prop = seg.property
             literal = format_filter_literal(seg.value)
-            if seg.literal_key and not _PROPERTY_NAME_RE.match(prop):
+            if seg.member_path is not None:
+                member = "".join(
+                    f".{key}" if _PROPERTY_NAME_RE.fullmatch(key) else "['" + key.replace("'", "''") + "']"
+                    for key in seg.members
+                )
+                parts.append(f"[?(@{member}=={literal})]")
+            elif seg.literal_key and not _PROPERTY_NAME_RE.match(prop):
                 # Literal property name that can't use dot notation — bracket
                 escaped_prop = prop.replace("'", "''")
                 parts.append(f"[?(@['{escaped_prop}']=={literal})]")

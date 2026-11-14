@@ -122,6 +122,11 @@ def _apply_move(obj: Any, op: Operation) -> Any:
     # Read value at source
     value = _read_value_at_path(obj, from_path)
 
+    # Preflight on a clone: a failed destination must not consume the source.
+    preview = copy.deepcopy(obj)
+    preview = _apply_operation(preview, Operation(op="remove", path=from_path))
+    _apply_operation(preview, Operation(op="add", path=to_path, value=value))
+
     # Remove from source
     remove_op = Operation(op="remove", path=from_path)
     obj = _apply_operation(obj, remove_op)
@@ -232,19 +237,19 @@ def _resolve_parent(
 _SENTINEL = object()
 
 
-def _resolve_property(obj: Any, key: str, *, literal: bool = False) -> Any:
+def _resolve_property(obj: Any, key: str, *, literal: bool = False, members: tuple[str, ...] | None = None) -> Any:
     """Resolve a property on a dict.
 
     When ``literal`` is False and the key contains dots, traverses nested segments.
     When ``literal`` is True, treats the key as a literal property name.
     Returns ``_SENTINEL`` if the property is missing (distinguishes from ``None``).
     """
-    if literal or "." not in key:
+    if members is None and (literal or "." not in key):
         if isinstance(obj, dict) and key in obj:
             return obj[key]
         return _SENTINEL
     current = obj
-    for seg in key.split("."):
+    for seg in members if members is not None else key.split("."):
         if not isinstance(current, dict) or seg not in current:
             return _SENTINEL
         current = current[seg]
@@ -260,7 +265,7 @@ def _find_key_filter_match(arr: list[Any], seg: KeyFilterSegment, path_str: str)
     """
     matches: list[int] = []
     for idx, elem in enumerate(arr):
-        resolved = _resolve_property(elem, seg.property, literal=seg.literal_key)
+        resolved = _resolve_property(elem, seg.property, literal=seg.literal_key, members=seg.member_path)
         if resolved is not _SENTINEL and json_equal(resolved, seg.value):
             matches.append(idx)
 
@@ -293,9 +298,7 @@ def _find_value_filter_match(arr: list[Any], seg: ValueFilterSegment, path_str: 
 # ---------------------------------------------------------------------------
 
 
-def _apply_property_op(
-    parent: Any, name: str, op_type: str, op: Operation, path_str: str
-) -> None:
+def _apply_property_op(parent: Any, name: str, op_type: str, op: Operation, path_str: str) -> None:
     """Apply an operation on an object property."""
     if not isinstance(parent, dict):
         raise ApplyError(f"Cannot apply property operation on {_type_name(parent)}: {path_str}")
@@ -324,9 +327,7 @@ def _apply_property_op(
 # ---------------------------------------------------------------------------
 
 
-def _apply_index_op(
-    parent: Any, index: int, op_type: str, op: Operation, path_str: str
-) -> None:
+def _apply_index_op(parent: Any, index: int, op_type: str, op: Operation, path_str: str) -> None:
     """Apply an operation on an array index."""
     if not isinstance(parent, list):
         raise ApplyError(f"Cannot apply index operation on {_type_name(parent)}: {path_str}")
@@ -371,7 +372,7 @@ def _apply_key_filter_op(
     if op_type == "add":
         # Filter must NOT match any existing element
         for elem in parent:
-            resolved = _resolve_property(elem, seg.property, literal=seg.literal_key)
+            resolved = _resolve_property(elem, seg.property, literal=seg.literal_key, members=seg.member_path)
             if resolved is not _SENTINEL and json_equal(resolved, seg.value):
                 raise ApplyError(f"Key filter already matches an element (use 'replace'): {path_str}")
 
@@ -440,27 +441,20 @@ def _apply_value_filter_op(
 # ---------------------------------------------------------------------------
 
 
-def _validate_keyed_array_consistency(
-    value: Any, seg: KeyFilterSegment, path_str: str
-) -> None:
+def _validate_keyed_array_consistency(value: Any, seg: KeyFilterSegment, path_str: str) -> None:
     """Validate that the value contains the identity property matching the filter.
 
     Applies to 'add' and element-level 'replace' on key-filtered paths
     (no trailing segments after filter).
     """
     if not isinstance(value, dict):
-        raise ApplyError(
-            f"Keyed-array value must be an object, got {_type_name(value)}: {path_str}"
-        )
-    resolved = _resolve_property(value, seg.property, literal=seg.literal_key)
+        raise ApplyError(f"Keyed-array value must be an object, got {_type_name(value)}: {path_str}")
+    resolved = _resolve_property(value, seg.property, literal=seg.literal_key, members=seg.member_path)
     if resolved is _SENTINEL:
-        raise ApplyError(
-            f"Keyed-array value missing identity property '{seg.property}': {path_str}"
-        )
+        raise ApplyError(f"Keyed-array value missing identity property '{seg.property}': {path_str}")
     if not json_equal(resolved, seg.value):
         raise ApplyError(
-            f"Keyed-array value identity mismatch: "
-            f"filter expects {seg.value!r} but value has {resolved!r}: {path_str}"
+            f"Keyed-array value identity mismatch: filter expects {seg.value!r} but value has {resolved!r}: {path_str}"
         )
 
 

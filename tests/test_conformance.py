@@ -1,70 +1,22 @@
-"""Conformance tests against the official JSON Atom fixture suite.
+"""Run every shared spec fixture, including all five operation types."""
 
-Level 1: apply(source, delta) == target
-Level 2: apply(target, inverse(delta)) == source
-"""
+import copy
+import json
+from pathlib import Path
 
-from json_atom.apply import apply_delta
-from json_atom.invert import invert_delta
+import pytest
 
-from tests.conftest import deep_clone, load_fixture
+from json_atom import apply_delta, revert_delta, validate_delta
+from json_atom._utils import json_equal
 
-
-class TestLevel1Apply:
-    """Level 1 conformance: apply(source, delta) == target."""
-
-    def test_basic_replace(self) -> None:
-        fixture = load_fixture("basic-replace")
-        source = deep_clone(fixture["source"])
-        result = apply_delta(source, fixture["delta"])
-        assert result == fixture["target"]
-
-    def test_keyed_array_update(self) -> None:
-        fixture = load_fixture("keyed-array-update")
-        source = deep_clone(fixture["source"])
-        result = apply_delta(source, fixture["delta"])
-        assert result == fixture["target"]
+FIXTURES = sorted((Path(__file__).parent / "fixtures").glob("*.json"))
 
 
-class TestLevel2Reversible:
-    """Level 2 conformance: apply(target, inverse(delta)) == source."""
-
-    def test_basic_replace(self) -> None:
-        fixture = load_fixture("basic-replace")
-        assert fixture["level"] >= 2
-        inverse = invert_delta(fixture["delta"])
-        target = deep_clone(fixture["target"])
-        recovered = apply_delta(target, inverse)
-        assert recovered == fixture["source"]
-
-    def test_keyed_array_update(self) -> None:
-        fixture = load_fixture("keyed-array-update")
-        assert fixture["level"] >= 2
-        inverse = invert_delta(fixture["delta"])
-        target = deep_clone(fixture["target"])
-        recovered = apply_delta(target, inverse)
-        assert recovered == fixture["source"]
-
-
-class TestRoundTrip:
-    """Full round-trip: apply then revert recovers source."""
-
-    def test_basic_replace_round_trip(self) -> None:
-        fixture = load_fixture("basic-replace")
-        source = deep_clone(fixture["source"])
-        target = apply_delta(deep_clone(fixture["source"]), fixture["delta"])
-        assert target == fixture["target"]
-
-        inverse = invert_delta(fixture["delta"])
-        recovered = apply_delta(target, inverse)
-        assert recovered == source
-
-    def test_keyed_array_update_round_trip(self) -> None:
-        fixture = load_fixture("keyed-array-update")
-        source = deep_clone(fixture["source"])
-        target = apply_delta(deep_clone(fixture["source"]), fixture["delta"])
-        assert target == fixture["target"]
-
-        inverse = invert_delta(fixture["delta"])
-        recovered = apply_delta(target, inverse)
-        assert recovered == source
+@pytest.mark.parametrize("path", FIXTURES, ids=lambda path: path.stem)
+def test_spec_conformance(path):
+    fixture = json.loads(path.read_text())
+    delta = fixture["delta"]
+    assert validate_delta(delta).valid
+    assert json_equal(apply_delta(copy.deepcopy(fixture["source"]), delta), fixture["target"])
+    if fixture["level"] == 2:
+        assert json_equal(revert_delta(copy.deepcopy(fixture["target"]), delta), fixture["source"])

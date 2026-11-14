@@ -1,7 +1,7 @@
 # json-atom-py
 
 [![CI](https://github.com/ltwlf/json-atom-py/actions/workflows/ci.yml/badge.svg)](https://github.com/ltwlf/json-atom-py/actions/workflows/ci.yml)
-[![PyPI version](https://badge.fury.io/py/json-atom-py.svg)](https://pypi.org/project/json-atom-py/)
+[![PyPI version](https://badge.fury.io/py/json-atom.svg)](https://pypi.org/project/json-atom/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -9,7 +9,9 @@
 
 Zero dependencies. Fully typed. Python 3.12+.
 
-> **Ecosystem note:** This project implements the [JSON Atom specification](https://github.com/ltwlf/json-atom-format). It is unrelated to the older `json-atom` package on PyPI.
+Created by [Christian Glessner](https://www.linkedin.com/in/christian-glessner/).
+
+> **Package names:** The repository is `json-atom-py`, the PyPI distribution is [`json-atom`](https://pypi.org/project/json-atom/), and Python imports use `json_atom`. This project implements the [JSON Atom specification](https://github.com/ltwlf/json-atom-format).
 
 ```text
 json-atom-format  (specification)
@@ -22,7 +24,7 @@ The specification defines the wire format. Each language implementation produces
 ## Installation
 
 ```bash
-pip install json-atom-py
+pip install json-atom
 ```
 
 ## Quick Start
@@ -57,6 +59,25 @@ The delta is a `Delta` instance (a `dict` subclass) — JSON-serializable, stora
   ]
 }
 ```
+
+## Sending atoms between Python and TypeScript
+
+The wire envelope is always `{"format": "json-atom", "version": 1, "operations": [...]}`.
+The draft specification filename (`spec/v0.md`) and package versions are independent of this wire version.
+
+Serialize a plain dictionary when writing JSON, including empty deltas:
+
+```python
+payload = json.dumps(dict(delta))
+# For files or streams: json.dump(dict(delta), output_file)
+```
+
+`Delta` deliberately uses operation-count truthiness. Converting to `dict` preserves the envelope when
+Python's streaming or indented JSON encoder encounters a delta with no operations.
+
+TypeScript can consume that payload with `applyAtom(source, JSON.parse(payload))` from
+[`json-diff-ts`](https://github.com/ltwlf/json-diff-ts). Use string identity keys for integers outside
+JavaScript's safe integer range. Diff options are implementation-specific; the emitted format is shared.
 
 ## Typed Models
 
@@ -144,7 +165,7 @@ Add    /items/0  ← now it's "NewItem"
 Update /items/1  ← this used to be /items/0
 ```
 
-This makes diffs fragile. You can't store them, replay them reliably, or build audit logs on top of them. This is the fundamental problem with index-based formats like JSON Patch (RFC 6902): paths like `/items/0` are positional, so any insertion, deletion, or reorder invalidates every subsequent path.
+Positional patches apply correctly to their expected source state. Independently reordering the target array can change which item a stored index addresses. Identity-based paths help when items must be addressed by key; they do not provide conflict resolution.
 
 **JSON Atom solves this with key-based identity.** Array elements are matched by a stable key, and paths use JSONPath filter expressions that survive insertions, deletions, and reordering:
 

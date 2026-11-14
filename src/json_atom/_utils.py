@@ -47,6 +47,10 @@ def json_equal(a: Any, b: Any) -> bool:
     if type(a) is not type(b):
         return False
 
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(json_equal(value, b[key]) for key, value in a.items())
+    if isinstance(a, list):
+        return len(a) == len(b) and all(json_equal(left, right) for left, right in zip(a, b, strict=True))
     return a == b  # type: ignore[no-any-return]
 
 

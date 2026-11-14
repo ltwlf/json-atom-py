@@ -66,8 +66,8 @@ tests/
 - **Specification**: [JSON Atom v0](https://github.com/ltwlf/json-atom-format/blob/main/spec/v0.md)
 - **Conformance**: Level 2 (Apply + Reversible) — passes all fixtures
 - **Spec is source of truth** — when spec and TypeScript reference diverge, follow the spec
-- **Spec-faithful divergence from TS**: digit-after-dot (`$.items.0`) is a PathError per spec grammar
-- **remove without oldValue**: valid per spec (OPTIONAL), unlike TS which requires it
+- **Shared v5 behavior**: both implementations reject digit-after-dot paths and accept remove operations without `oldValue` (undo still requires it).
+- **Packaging**: PyPI distribution `json-atom`, repository `json-atom-py`, import `json_atom`.
 
 ## Coding Conventions
 
